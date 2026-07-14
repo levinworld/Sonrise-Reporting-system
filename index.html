@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sonrise Ministries — Monthly Reports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --paper:#F5F6F1;
+    --paper-raised:#FFFFFF;
+    --ink:#1C2321;
+    --slate:#5B6660;
+    --slate-light:#8B948E;
+    --forest:#1F4D3A;
+    --forest-dark:#163829;
+    --forest-tint:#E7EFE9;
+    --gold:#B9852E;
+    --gold-tint:#F5EBD8;
+    --danger:#B33A3A;
+    --danger-tint:#F7E7E5;
+    --border:#DDE1DA;
+    --radius:10px;
+    --shadow:0 1px 3px rgba(28,35,33,0.08), 0 4px 14px rgba(28,35,33,0.05);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    font-size:15px; line-height:1.5;
+  }
+  h1,h2,h3,.brand{ font-family:'Fraunces', serif; font-weight:600; color:var(--forest-dark); }
+  a{ color:var(--forest); }
+  .hidden{ display:none !important; }
+
+  /* ---------- shell ---------- */
+  #topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px; background:var(--paper-raised); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:20;
+  }
+  #topbar .brand{ font-size:19px; }
+  #topbar .brand small{ display:block; font-family:'IBM Plex Sans'; font-weight:500; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--slate-light); }
+  #topbar nav{ display:flex; gap:6px; }
+  #topbar nav button{
+    background:none; border:none; padding:8px 14px; border-radius:8px; cursor:pointer;
+    font-size:14px; font-weight:500; color:var(--slate); font-family:inherit;
+  }
+  #topbar nav button.active{ background:var(--forest-tint); color:var(--forest-dark); }
+  #topbar .who{ display:flex; align-items:center; gap:12px; font-size:13px; color:var(--slate); }
+  #topbar .who button{ border:1px solid var(--border); background:var(--paper-raised); border-radius:8px; padding:6px 12px; cursor:pointer; font-family:inherit; }
+
+  main{ max-width:1000px; margin:0 auto; padding:28px 20px 80px; }
+  .card{ background:var(--paper-raised); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:22px 24px; margin-bottom:18px; }
+
+  /* ---------- login ---------- */
+  #loginScreen{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  #loginScreen .card{ width:360px; }
+  #loginScreen h1{ margin:0 0 4px; font-size:22px; }
+  #loginScreen p.sub{ color:var(--slate); margin:0 0 20px; font-size:13px; }
+  label{ display:block; font-size:13px; font-weight:500; color:var(--slate); margin:12px 0 5px; }
+  input[type=text], input[type=email], input[type=password], input[type=date], input[type=number], select, textarea{
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px;
+    font-family:inherit; font-size:14px; background:#fff; color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold); }
+  textarea{ min-height:80px; resize:vertical; }
+  .btn{
+    display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:10px 18px;
+    font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .btn-primary{ background:var(--forest); color:#fff; }
+  .btn-primary:hover{ background:var(--forest-dark); }
+  .btn-secondary{ background:var(--paper); color:var(--forest-dark); border:1px solid var(--border); }
+  .btn-danger{ background:var(--danger); color:#fff; }
+  .btn-block{ width:100%; justify-content:center; margin-top:16px; }
+  .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  .error-msg{ background:var(--danger-tint); color:var(--danger); padding:9px 12px; border-radius:8px; font-size:13px; margin-top:10px; }
+  .note-msg{ background:var(--gold-tint); color:#7A5A1E; padding:9px 12px; border-radius:8px; font-size:13px; margin:10px 0; }
+
+  /* ---------- dashboard cards ---------- */
+  .dash-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+  .dash-card{ background:var(--forest-tint); border-radius:var(--radius); padding:14px 16px; }
+  .dash-card .icon{ font-size:20px; }
+  .dash-card .val{ font-family:'Fraunces'; font-size:22px; font-weight:600; color:var(--forest-dark); margin-top:2px; }
+  .dash-card .lbl{ font-size:12px; color:var(--slate); }
+
+  /* ---------- form sections ---------- */
+  .section-title{ font-size:16px; margin:26px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .field-row{ margin-bottom:2px; }
+  .field-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
+  @media (max-width:640px){ .field-grid{ grid-template-columns:1fr; } }
+  .readonly-badge{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--slate-light); margin-left:6px; }
+
+  table.data-table{ width:100%; border-collapse:collapse; margin:8px 0 4px; font-size:13px; }
+  table.data-table th{ text-align:left; background:var(--forest-tint); color:var(--forest-dark); padding:7px 8px; font-weight:600; white-space:nowrap; }
+  table.data-table td{ padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
+  table.data-table input, table.data-table select{ font-size:13px; padding:6px 8px; min-width:90px; }
+  table.data-table tr.totals-row td{ font-weight:700; background:var(--gold-tint); }
+  .table-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+  .row-del{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:16px; }
+
+  /* ---------- status chips ---------- */
+  .chip{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px; text-transform:uppercase; letter-spacing:.03em; }
+  .chip-draft{ background:var(--gold-tint); color:#7A5A1E; }
+  .chip-submitted{ background:var(--forest-tint); color:var(--forest-dark); }
+  .chip-locked{ background:var(--danger-tint); color:var(--danger); }
+
+  /* ---------- leader dashboard list ---------- */
+  .report-row{ display:flex; align-items:center; justify-content:space-between; padding:14px 4px; border-bottom:1px solid var(--border); cursor:pointer; border-left:4px solid transparent; padding-left:14px; }
+  .report-row:hover{ background:var(--paper); }
+  .report-row.st-draft{ border-left-color:var(--gold); }
+  .report-row.st-submitted{ border-left-color:var(--forest); }
+  .report-row .dept{ font-weight:600; }
+  .report-row .meta{ font-size:12px; color:var(--slate); }
+
+  .comment{ padding:10px 0; border-bottom:1px solid var(--border); }
+  .comment .who{ font-weight:600; font-size:13px; }
+  .comment .when{ font-size:11px; color:var(--slate-light); margin-left:8px; }
+  .comment .body{ font-size:14px; margin-top:3px; white-space:pre-wrap; }
+  .comment.way-forward{ background:var(--gold-tint); border-radius:8px; padding:10px 12px; border:none; }
+  .comment.way-forward .who::before{ content:"➡ WAY FORWARD — "; color:var(--gold); }
+
+  .admin-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .admin-table th{ text-align:left; padding:8px; border-bottom:2px solid var(--border); color:var(--slate); }
+  .admin-table td{ padding:8px; border-bottom:1px solid var(--border); }
+  .pill{ font-size:11px; padding:2px 8px; border-radius:99px; background:var(--forest-tint); color:var(--forest-dark); margin-right:4px; }
+
+  /* ---------- read-only report display ---------- */
+  .ro-field{ margin-bottom:14px; }
+  .ro-label{ font-size:11px; font-weight:600; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+  .ro-value{ font-size:14px; white-space:pre-wrap; }
+  .ro-empty{ font-size:13px; color:var(--slate-light); font-style:italic; margin:4px 0 10px; }
+  table.ro-table td{ font-size:13px; }
+
+  /* ---------- department dashboard ---------- */
+  .this-month-box{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .this-month-box .status-block{ display:flex; align-items:center; gap:10px; }
+  .this-month-box .status-block .m{ font-weight:600; font-size:15px; }
+
+  /* ---------- leader: department tile grid ---------- */
+  .dept-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .dept-tile{
+    position:relative; background:var(--paper); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px 16px; cursor:pointer; transition:box-shadow .15s, transform .15s;
+  }
+  .dept-tile:hover{ box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--forest); }
+  .dept-tile-name{ font-family:'Fraunces'; font-weight:600; color:var(--forest-dark); font-size:15px; margin-bottom:4px; padding-right:60px; }
+  .dept-tile-meta{ font-size:12px; color:var(--slate); }
+  .dept-tile-badge{
+    position:absolute; top:14px; right:14px; background:var(--danger); color:#fff;
+    font-size:10px; font-weight:700; padding:3px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.03em;
+  }
+
+  /* ---------- print ---------- */
+  @media print{
+    #topbar, .no-print{ display:none !important; }
+    body{ background:#fff; }
+    main{ max-width:100%; padding:0; margin:0; }
+    .card{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; margin-bottom:12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ LOGIN ============================================================ -->
+<div id="loginScreen">
+  <div class="card">
+    <h1>Sonrise Ministries</h1>
+    <p class="sub">Monthly Reporting System</p>
+    <label for="loginEmail">Email</label>
+    <input type="email" id="loginEmail" autocomplete="username">
+    <label for="loginPassword">Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password">
+    <button class="btn btn-primary btn-block" onclick="doLogin()">Sign in</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- ============================================================ APP SHELL ============================================================ -->
+<div id="appShell" class="hidden">
+  <div id="topbar">
+    <div class="brand">Sonrise Ministries <small>Monthly Reports</small></div>
+    <nav id="mainNav"></nav>
+    <div class="who">
+      <span id="whoAmI"></span>
+      <button onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+  <main>
+    <div id="viewMyReport"></div>
+    <div id="viewAllReports"></div>
+    <div id="viewReportDetail"></div>
+    <div id="viewAdmin"></div>
+  </main>
+</div>
+
+<script src="schemas.js"></script>
+<script>
+/* =====================================================================
+   CONFIG — replace with your Supabase project's values before deploying
+   ===================================================================== */
+const SUPABASE_URL = 'https://bthiwndaojiecunwkvlr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0aGl3bmRhb2ppZWN1bndrdmxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjQxMDAsImV4cCI6MjA5OTAwMDEwMH0.azkbA7AiGbjEAyoUom9xww95FIDeHQq90aEF-_oThoI
+';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let CURRENT_USER = null;   // Supabase auth user
+let PROFILE = null;        // row from profiles table
+let DEPARTMENTS = [];      // all departments
+let currentView = 'myReport';
+let formState = {};        // in-memory data for the report currently being edited
+let currentReportRow = null;
+let currentSchema = null;
+
+/* ---------------------------------------------------------------- AUTH ---------------------------------------------------------------- */
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  document.getElementById('loginError').innerHTML = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error){
+    document.getElementById('loginError').innerHTML = `<div class="error-msg">${error.message}</div>`;
+    return;
+  }
+  await bootAfterLogin();
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  location.reload();
+}
+
+async function bootAfterLogin(){
+  const { data: { user } } = await sb.auth.getUser();
+  CURRENT_USER = user;
+  if (!user){ return; }
+
+  const { data: profile, error: pErr } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  if (pErr || !profile){
+    document.getElementById('loginError').innerHTML = `<div class="error-msg">Signed in, but no profile record was found for this account. Ask your admin to add you.</div>`;
+    return;
+  }
+  PROFILE = profile;
+
+  const { data: depts } = await sb.from('departments').select('*').order('name');
+  DEPARTMENTS = depts || [];
+
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  document.getElementById('whoAmI').textContent = `${PROFILE.full_name}${PROFILE.role_title ? ' · ' + PROFILE.role_title : ''}`;
+
+  buildNav();
+  navigate(PROFILE.department_id ? 'myReport' : (PROFILE.is_leader || PROFILE.is_admin ? 'allReports' : 'myReport'));
+}
+
+function buildNav(){
+  const nav = document.getElementById('mainNav');
+  nav.innerHTML = '';
+  const addBtn = (key, label) => {
+    const b = document.createElement('button');
+    b.textContent = label; b.dataset.key = key;
+    b.onclick = () => navigate(key);
+    nav.appendChild(b);
+  };
+  if (PROFILE.department_id) addBtn('myReport', 'My Report');
+  if (PROFILE.is_leader || PROFILE.is_admin) addBtn('allReports', 'All Reports');
+  if (PROFILE.is_admin) addBtn('admin', 'Admin');
+}
+
+let reportDetailReturnTo = 'allReports';
+
+function handleReportDetailBack(){
+  if (reportDetailReturnTo === 'myReport'){ navigate('myReport'); return; }
+  if (reportDetailReturnTo === 'deptReports' && lastOpenDeptId){
+    showView('allReports');
+    openDepartmentReports(lastOpenDeptId);
+    return;
+  }
+  navigate('allReports');
+}
+
+function showView(key){
+  currentView = key;
+  ['myReport','allReports','reportDetail','admin'].forEach(k => {
+    document.getElementById('view' + k[0].toUpperCase() + k.slice(1)).classList.add('hidden');
+  });
+  document.querySelectorAll('#mainNav button').forEach(b => b.classList.toggle('active', b.dataset.key === key));
+  document.getElementById('view' + key[0].toUpperCase() + key.slice(1)).classList.remove('hidden');
+}
+
+function navigate(key){
+  showView(key);
+  if (key === 'myReport') renderMyDashboard();
+  if (key === 'allReports') renderAllReports();
+  if (key === 'admin') renderAdmin();
+}
+
+/* ---------------------------------------------------------------- HELPERS ---------------------------------------------------------------- */
+function monthName(m){ return ['January','February','March','April','May','June','July','August','September','October','November','December'][m-1]; }
+function todayUgandaDay(){
+  // approximate: Africa/Kampala is UTC+3 with no DST
+  const now = new Date(Date.now() + 3*60*60*1000);
+  return { day: now.getUTCDate(), month: now.getUTCMonth()+1, year: now.getUTCFullYear() };
+}
+function withinWindow(){ return todayUgandaDay().day <= 5; }
+function fmtDate(d){ return d ? new Date(d).toLocaleDateString() : ''; }
+
+/* ================================================================
+   MY REPORT DASHBOARD  (department head landing view)
+   ================================================================ */
+async function loadDeptReportsWithStatus(deptId){
+  const { data: reports } = await sb.from('monthly_reports').select('*')
+    .eq('department_id', deptId)
+    .order('report_year', { ascending: false }).order('report_month', { ascending: false });
+  return reports || [];
+}
+
+async function renderMyDashboard(){
+  const el = document.getElementById('viewMyReport');
+  el.innerHTML = `<div class="card">Loading…</div>`;
+  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
+  if (!dept){ el.innerHTML = '<div class="card">No department assigned to your account.</div>'; return; }
+  const schema = window.SCHEMAS[dept.slug];
+
+  if (schema.comingSoon){
+    el.innerHTML = `<div class="card"><h2>${dept.name}</h2>
+      <div class="note-msg">This department's report form is being finalized and will be enabled shortly. Contact your admin if you believe this is a mistake.</div></div>`;
+    return;
+  }
+
+  const { year, month } = todayUgandaDay();
+  const reports = await loadDeptReportsWithStatus(dept.id);
+  const current = reports.find(r => r.report_month === month && r.report_year === year);
+
+  const { data: override } = await sb.from('submission_overrides')
+    .select('id').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year).maybeSingle();
+  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
+
+  let html = `<div class="card"><h2 style="margin-top:0;">${dept.name}</h2>
+    <div class="this-month-box">
+      <div class="status-block">
+        <span class="m">${monthName(month)} ${year}</span>
+        ${current && current.status === 'submitted' ? '<span class="chip chip-submitted">Submitted</span>' :
+          (windowOpen ? `<span class="chip chip-draft">${current ? 'Draft in progress' : 'Not started'}</span>` : '<span class="chip chip-locked">Window closed</span>')}
+      </div>`;
+
+  if (current && current.status === 'submitted'){
+    html += `<button class="btn btn-secondary" onclick="viewMyPastReport('${current.id}')">View Submitted Report</button>`;
+  } else if (windowOpen){
+    html += `<button class="btn btn-primary" onclick="renderMyReportForm()">${current ? 'Continue Draft' : 'Start Monthly Report'}</button>`;
+  }
+  html += `</div>`;
+  if (!(current && current.status === 'submitted') && !windowOpen){
+    html += `<div class="error-msg" style="margin-top:12px;">The submission window for this month closed after the 5th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div>`;
+  }
+  html += `</div>`;
+
+  const commentsFeed = await loadDeptCommentsFeed(dept.id);
+  html += `<div class="card"><h3 style="margin-top:0;">Leader Responses</h3>`;
+  html += !commentsFeed.length
+    ? `<p style="color:var(--slate);font-size:13px;">No comments or way-forward notes from leaders yet.</p>`
+    : commentsFeed.slice(0, 15).map(c => `
+        <div class="comment ${c.is_way_forward ? 'way-forward' : ''}" style="cursor:pointer;" onclick="viewMyPastReport('${c.report_id}')">
+          <span class="who">${c.profiles?.full_name || 'A leader'}</span>
+          <span class="when">${monthName(c.reportMonth)} ${c.reportYear} · ${fmtDate(c.created_at)}</span>
+          ${c.unread ? '<span class="chip chip-locked" style="margin-left:8px;">New</span>' : ''}
+          <div class="body">${c.comment.replace(/</g,'&lt;')}</div>
+        </div>`).join('');
+  html += `</div>`;
+
+  html += `<div class="card"><h3 style="margin-top:0;">Form History</h3>`;
+  html += !reports.length
+    ? `<p style="color:var(--slate);font-size:13px;">No reports submitted yet.</p>`
+    : reports.map(r => `
+        <div class="report-row st-${r.status}" onclick="viewMyPastReport('${r.id}')">
+          <div><div class="dept">${monthName(r.report_month)} ${r.report_year}</div>
+            <div class="meta">${r.submitted_at ? 'Submitted ' + fmtDate(r.submitted_at) : 'Draft'}</div></div>
+          <span class="chip chip-${r.status}">${r.status}</span>
+        </div>`).join('');
+  html += `</div>`;
+
+  el.innerHTML = html;
+}
+
+async function loadDeptCommentsFeed(deptId){
+  const { data: reports } = await sb.from('monthly_reports').select('id, report_month, report_year').eq('department_id', deptId);
+  if (!reports || !reports.length) return [];
+  const ids = reports.map(r => r.id);
+  const reportMap = Object.fromEntries(reports.map(r => [r.id, r]));
+
+  const { data: comments } = await sb.from('report_comments')
+    .select('*, profiles(full_name)').in('report_id', ids).order('created_at', { ascending: false });
+  if (!comments || !comments.length) return [];
+
+  const { data: views } = await sb.from('report_views').select('report_id, last_viewed_at').eq('viewer_id', PROFILE.id).in('report_id', ids);
+  const viewMap = Object.fromEntries((views || []).map(v => [v.report_id, v.last_viewed_at]));
+
+  return comments.map(c => ({
+    ...c,
+    reportMonth: reportMap[c.report_id]?.report_month,
+    reportYear: reportMap[c.report_id]?.report_year,
+    unread: !viewMap[c.report_id] || c.created_at > viewMap[c.report_id],
+  }));
+}
+
+function viewMyPastReport(reportId){
+  reportDetailReturnTo = 'myReport';
+  openReportDetail(reportId);
+}
+
+/* ================================================================
+   MY REPORT FORM  (the actual editable monthly submission)
+   ================================================================ */
+async function renderMyReportForm(){
+  const el = document.getElementById('viewMyReport');
+  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
+  const schema = window.SCHEMAS[dept.slug];
+  currentSchema = schema;
+  const { year, month } = todayUgandaDay();
+
+  const { data: existing } = await sb.from('monthly_reports')
+    .select('*').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year)
+    .maybeSingle();
+
+  currentReportRow = existing || null;
+  formState = (existing && existing.data) ? JSON.parse(JSON.stringify(existing.data)) : {};
+
+  if (existing && existing.status === 'submitted'){
+    viewMyPastReport(existing.id);
+    return;
+  }
+
+  const { data: override } = await sb.from('submission_overrides')
+    .select('id').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year).maybeSingle();
+  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
+
+  let html = `<button class="btn btn-secondary" onclick="navigate('myReport')" style="margin-bottom:14px;">← Back to my dashboard</button>`;
+  html += `<div class="card"><h2>${schema.title}</h2>
+    <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} report ·
+      ${windowOpen ? '<span class="chip chip-draft">Draft — due by the 5th</span>' : '<span class="chip chip-locked">Submission window closed</span>'}
+    </p>`;
+
+  if (!windowOpen){
+    html += `<div class="error-msg">The submission window for this month closed after the 5th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div></div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<div id="formSections"></div>`;
+  html += `<div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn btn-secondary" id="btnSaveDraft">Save Draft</button>
+      <button class="btn btn-primary" id="btnSubmit">Submit Report</button>
+    </div>`;
+  html += `<div id="myReportMsg"></div></div>`;
+  el.innerHTML = html;
+
+  autofillReadOnlyFields(schema, { month, year });
+  renderFormSections(schema, document.getElementById('formSections'), false);
+  updateDashboard(schema);
+
+  document.getElementById('btnSaveDraft').onclick = () => saveReport(dept.id, month, year, 'draft');
+  document.getElementById('btnSubmit').onclick = () => submitReport(dept, month, year);
+}
+
+function autofillReadOnlyFields(schema, ctx){
+  schema.sections.forEach(sec => sec.fields.forEach(f => {
+    if (f.autoFill && formState[f.key] === undefined){
+      if (f.autoFill === 'monthYear') formState[f.key] = `${monthName(ctx.month)} ${ctx.year}`;
+      if (f.autoFill === 'today') formState[f.key] = new Date().toISOString().slice(0,10);
+      if (f.autoFill === 'submitterName') formState[f.key] = PROFILE.full_name;
+      if (f.autoFill === 'submitterEmail') formState[f.key] = PROFILE.email;
+    }
+  }));
+}
+
+function renderFormSections(schema, container, locked){
+  container.innerHTML = '';
+  schema.sections.forEach(sec => {
+    const h = document.createElement('div');
+    h.className = 'section-title';
+    h.textContent = sec.title;
+    container.appendChild(h);
+    sec.fields.forEach(f => container.appendChild(renderField(f, schema, locked)));
+  });
+}
+
+function renderField(f, schema, locked){
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+
+  if (f.type === 'table'){
+    if (!Array.isArray(formState[f.key])) formState[f.key] = [];
+    wrap.appendChild(renderTable(f, schema, locked));
+    return wrap;
+  }
+
+  const label = document.createElement('label');
+  label.textContent = f.label;
+  if (f.readOnly){ const b = document.createElement('span'); b.className='readonly-badge'; b.textContent='auto'; label.appendChild(b); }
+  wrap.appendChild(label);
+
+  let input;
+  if (f.type === 'textarea'){
+    input = document.createElement('textarea');
+    input.value = formState[f.key] || '';
+  } else if (f.type === 'select'){
+    input = document.createElement('select');
+    input.innerHTML = '<option value="">Select…</option>' + f.options.map(o => `<option value="${o}">${o}</option>`).join('');
+    input.value = formState[f.key] || '';
+  } else if (f.type === 'yesno'){
+    input = document.createElement('select');
+    input.innerHTML = '<option value="">Select…</option><option value="Yes">Yes</option><option value="No">No</option>';
+    input.value = formState[f.key] || '';
+  } else if (f.type === 'date'){
+    input = document.createElement('input'); input.type = 'date'; input.value = formState[f.key] || '';
+  } else if (f.type === 'number'){
+    input = document.createElement('input'); input.type = 'number'; input.value = formState[f.key] ?? '';
+  } else {
+    input = document.createElement('input'); input.type = 'text'; input.value = formState[f.key] || '';
+  }
+  input.disabled = !!f.readOnly || locked;
+  input.oninput = input.onchange = () => {
+    formState[f.key] = (f.type === 'number') ? Number(input.value) : input.value;
+    updateDashboard(schema);
+    if (f.revealField) toggleReveal(f);
+  };
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function renderTable(f, schema, locked){
+  const box = document.createElement('div');
+  const label = document.createElement('label');
+  label.textContent = f.label;
+  box.appendChild(label);
+
+  const table = document.createElement('table');
+  table.className = 'data-table';
+  box.appendChild(table);
+
+  function redraw(){
+    const rows = formState[f.key];
+    let thead = '<tr>' + f.columns.map(c => `<th>${c.label}</th>`).join('') + (locked?'':'<th></th>') + '</tr>';
+    table.innerHTML = '<thead>' + thead + '</thead><tbody></tbody>';
+    const tbody = table.querySelector('tbody');
+
+    rows.forEach((row, idx) => {
+      const tr = document.createElement('tr');
+      f.columns.forEach(col => {
+        const td = document.createElement('td');
+        if (col.showIf && !col.showIf(row)){ tr.appendChild(td); return; }
+        if (col.auto){
+          const val = col.auto(row);
+          row[col.key] = val;
+          td.textContent = (typeof val === 'number') ? val.toLocaleString() : val;
+        } else {
+          let inp;
+          if (col.type === 'select'){
+            inp = document.createElement('select');
+            inp.innerHTML = '<option value="">—</option>' + col.options.map(o => `<option value="${o}">${o}</option>`).join('');
+            inp.value = row[col.key] || '';
+          } else if (col.type === 'date'){
+            inp = document.createElement('input'); inp.type='date'; inp.value = row[col.key] || '';
+          } else if (col.type === 'number'){
+            inp = document.createElement('input'); inp.type='number'; inp.value = row[col.key] ?? '';
+          } else {
+            inp = document.createElement('input'); inp.type='text'; inp.value = row[col.key] || '';
+          }
+          inp.disabled = locked;
+          inp.onchange = inp.oninput = () => {
+            row[col.key] = (col.type === 'number') ? Number(inp.value) : inp.value;
+            redraw();
+            updateDashboard(schema);
+          };
+          td.appendChild(inp);
+        }
+        tr.appendChild(td);
+      });
+      if (!locked){
+        const delTd = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'row-del'; delBtn.textContent = '✕'; delBtn.title = 'Remove row';
+        delBtn.onclick = () => { rows.splice(idx,1); redraw(); updateDashboard(schema); };
+        delTd.appendChild(delBtn);
+        tr.appendChild(delTd);
+      }
+      tbody.appendChild(tr);
+    });
+
+    if (f.totals){
+      const tr = document.createElement('tr');
+      tr.className = 'totals-row';
+      f.columns.forEach((col, i) => {
+        const td = document.createElement('td');
+        const t = f.totals.find(t => t.column === col.key);
+        if (t) td.textContent = t.label + ': ' + sumCol(rows, col.key).toLocaleString();
+        tr.appendChild(td);
+      });
+      if (!locked) tr.appendChild(document.createElement('td'));
+      tbody.appendChild(tr);
+    }
+  }
+  redraw();
+
+  if (!locked){
+    const actions = document.createElement('div');
+    actions.className = 'table-actions';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-secondary'; addBtn.textContent = '+ Add Row'; addBtn.style.padding='6px 12px'; addBtn.style.fontSize='13px';
+    addBtn.onclick = () => { formState[f.key].push({}); redraw(); updateDashboard(schema); };
+    actions.appendChild(addBtn);
+    box.appendChild(actions);
+  }
+  return box;
+}
+function sumCol(rows, key){ return (rows||[]).reduce((t,r)=>t+(Number(r[key])||0),0); }
+
+/* ---------------------------------------------------------------- READ-ONLY RENDERING (viewing someone's submitted report) ---------------------------------------------------------------- */
+function displayValue(v){
+  if (v === undefined || v === null || v === '') return '—';
+  if (typeof v === 'number') return v.toLocaleString();
+  return String(v);
+}
+
+function renderFormSectionsReadOnly(schema, container){
+  container.innerHTML = '';
+  schema.sections.forEach(sec => {
+    const h = document.createElement('div');
+    h.className = 'section-title';
+    h.textContent = sec.title;
+    container.appendChild(h);
+    sec.fields.forEach(f => container.appendChild(renderFieldReadOnly(f)));
+  });
+}
+
+function renderFieldReadOnly(f){
+  if (f.type === 'table') return renderTableReadOnly(f);
+  const wrap = document.createElement('div');
+  wrap.className = 'ro-field';
+  const label = document.createElement('div');
+  label.className = 'ro-label';
+  label.textContent = f.label;
+  const val = document.createElement('div');
+  val.className = 'ro-value';
+  val.textContent = displayValue(formState[f.key]);
+  wrap.appendChild(label);
+  wrap.appendChild(val);
+  return wrap;
+}
+
+function renderTableReadOnly(f){
+  const box = document.createElement('div');
+  box.className = 'ro-field';
+  const label = document.createElement('div');
+  label.className = 'ro-label';
+  label.textContent = f.label;
+  box.appendChild(label);
+
+  const rows = formState[f.key] || [];
+  if (!rows.length){
+    const p = document.createElement('p');
+    p.className = 'ro-empty';
+    p.textContent = 'No entries recorded.';
+    box.appendChild(p);
+    return box;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'data-table ro-table';
+  let thead = '<tr>' + f.columns.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+  let tbody = rows.map(row => '<tr>' + f.columns.map(col => {
+    if (col.showIf && !col.showIf(row)) return '<td>—</td>';
+    const v = col.auto ? col.auto(row) : row[col.key];
+    return `<td>${displayValue(v)}</td>`;
+  }).join('') + '</tr>').join('');
+  if (f.totals){
+    tbody += '<tr class="totals-row">' + f.columns.map(col => {
+      const t = f.totals.find(t => t.column === col.key);
+      return `<td>${t ? t.label + ': ' + sumCol(rows, col.key).toLocaleString() : ''}</td>`;
+    }).join('') + '</tr>';
+  }
+  table.innerHTML = '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody>';
+  box.appendChild(table);
+  return box;
+}
+
+function updateDashboard(schema){
+  const box = document.getElementById('dashCards');
+  if (!box || !schema.dashboard) return;
+  box.innerHTML = schema.dashboard.map(d => {
+    let val;
+    try { val = d.compute(formState); } catch(e){ val = 0; }
+    if (typeof val === 'number') val = val.toLocaleString();
+    return `<div class="dash-card"><span class="icon">${d.icon}</span><div class="val">${val}</div><div class="lbl">${d.label}</div></div>`;
+  }).join('');
+}
+
+async function saveReport(deptId, month, year, status){
+  const msg = document.getElementById('myReportMsg');
+  const payload = {
+    department_id: deptId, report_month: month, report_year: year,
+    data: formState, status,
+    submitted_by: status === 'submitted' ? PROFILE.id : (currentReportRow ? currentReportRow.submitted_by : null),
+    submitted_at: status === 'submitted' ? new Date().toISOString() : (currentReportRow ? currentReportRow.submitted_at : null),
+  };
+  let result;
+  if (currentReportRow){
+    result = await sb.from('monthly_reports').update(payload).eq('id', currentReportRow.id).select().single();
+  } else {
+    result = await sb.from('monthly_reports').insert(payload).select().single();
+  }
+  if (result.error){
+    msg.innerHTML = `<div class="error-msg">${result.error.message}</div>`;
+    return null;
+  }
+  currentReportRow = result.data;
+  msg.innerHTML = `<div class="note-msg">${status === 'submitted' ? 'Report submitted.' : 'Draft saved.'}</div>`;
+  return result.data;
+}
+
+async function submitReport(dept, month, year){
+  if (!confirm('Submit this report? Ministry leaders will be notified immediately, and you will not be able to edit it after submitting (unless an admin reopens it).')) return;
+  const saved = await saveReport(dept.id, month, year, 'submitted');
+  if (!saved) return;
+  // fire-and-forget notification — failure here should not block the submission itself
+  fetch('/.netlify/functions/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ departmentName: dept.name, month: monthName(month), year, submitterName: PROFILE.full_name, reportId: saved.id }),
+  }).catch(() => {});
+  navigate('myReport');
+}
+
+/* ================================================================
+   ALL REPORTS  (leader / admin view) — one tile per department,
+   with a "New" badge for reports this leader hasn't opened yet.
+   ================================================================ */
+let lastOpenDeptId = null;
+
+async function renderAllReports(){
+  const el = document.getElementById('viewAllReports');
+  el.innerHTML = `<div class="card"><h2 style="margin-top:0;">All Department Reports</h2><div id="deptGrid" class="dept-grid">Loading…</div></div>`;
+  lastOpenDeptId = null;
+
+  const { data: reports } = await sb.from('monthly_reports')
+    .select('id, department_id, status, report_month, report_year, submitted_at')
+    .eq('status', 'submitted');
+
+  const ids = (reports || []).map(r => r.id);
+  const { data: views } = ids.length
+    ? await sb.from('report_views').select('report_id').eq('viewer_id', PROFILE.id).in('report_id', ids)
+    : { data: [] };
+  const viewedSet = new Set((views || []).map(v => v.report_id));
+
+  const byDept = {};
+  (reports || []).forEach(r => {
+    const bucket = byDept[r.department_id] || { latest: null, pending: 0 };
+    bucket.pending += viewedSet.has(r.id) ? 0 : 1;
+    if (!bucket.latest || r.report_year > bucket.latest.report_year ||
+        (r.report_year === bucket.latest.report_year && r.report_month > bucket.latest.report_month)) {
+      bucket.latest = r;
+    }
+    byDept[r.department_id] = bucket;
+  });
+
+  const grid = document.getElementById('deptGrid');
+  grid.innerHTML = DEPARTMENTS.map(d => {
+    const info = byDept[d.id];
+    const schema = window.SCHEMAS[d.slug];
+    const badge = info && info.pending > 0 ? `<span class="dept-tile-badge">${info.pending} New</span>` : '';
+    const meta = schema.comingSoon ? 'Form not yet active'
+      : (info && info.latest ? `Latest: ${monthName(info.latest.report_month)} ${info.latest.report_year}` : 'No reports yet');
+    return `<div class="dept-tile" onclick="openDepartmentReports('${d.id}')">
+      ${badge}
+      <div class="dept-tile-name">${d.name}</div>
+      <div class="dept-tile-meta">${meta}</div>
+    </div>`;
+  }).join('');
+}
+
+async function openDepartmentReports(deptId){
+  lastOpenDeptId = deptId;
+  const dept = DEPARTMENTS.find(d => d.id === deptId);
+  const el = document.getElementById('viewAllReports');
+  el.innerHTML = `<div class="card">Loading…</div>`;
+
+  const { data: reports } = await sb.from('monthly_reports').select('*')
+    .eq('department_id', deptId)
+    .order('report_year', { ascending: false }).order('report_month', { ascending: false });
+
+  let html = `<button class="btn btn-secondary" onclick="renderAllReports()" style="margin-bottom:14px;">← Back to all departments</button>`;
+  html += `<div class="card"><h2 style="margin-top:0;">${dept.name}</h2>`;
+  html += !reports || !reports.length
+    ? `<p style="color:var(--slate);font-size:13px;">No reports submitted yet.</p>`
+    : reports.map(r => `
+        <div class="report-row st-${r.status}" onclick="viewReportFromAllReports('${r.id}')">
+          <div><div class="dept">${monthName(r.report_month)} ${r.report_year}</div>
+            <div class="meta">${r.submitted_at ? 'Submitted ' + fmtDate(r.submitted_at) : 'Draft'}</div></div>
+          <span class="chip chip-${r.status}">${r.status}</span>
+        </div>`).join('');
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function viewReportFromAllReports(reportId){
+  reportDetailReturnTo = 'deptReports';
+  openReportDetail(reportId);
+}
+
+/* ================================================================
+   REPORT DETAIL  (read-only render + comments)
+   ================================================================ */
+let commentsChannel = null;
+
+async function openReportDetail(reportId){
+  navigate('reportDetail');
+  const el = document.getElementById('viewReportDetail');
+  el.innerHTML = `<div class="card">Loading…</div>`;
+
+  const { data: r, error } = await sb.from('monthly_reports').select('*, departments(name, slug)').eq('id', reportId).single();
+  if (error){ el.innerHTML = `<div class="card error-msg">${error.message}</div>`; return; }
+
+  const schema = window.SCHEMAS[r.departments.slug];
+  formState = r.data || {};
+
+  const backLabel = reportDetailReturnTo === 'myReport' ? '← Back to my dashboard' : '← Back to reports';
+  let html = `<div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <button class="btn btn-secondary" onclick="handleReportDetailBack()">${backLabel}</button>
+      <button class="btn btn-secondary" onclick="window.print()">🖶 Print / Save as PDF</button>
+    </div>`;
+  html += `<div class="card"><h2>${schema.title}</h2>
+    <p style="color:var(--slate);font-size:13px;">${r.departments.name} · ${monthName(r.report_month)} ${r.report_year} ·
+      <span class="chip chip-${r.status}">${r.status}</span></p>`;
+  html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<div id="formSections"></div></div>`;
+
+  html += `<div class="card"><h3 style="margin-top:0;">Comments &amp; Way Forward</h3>
+    <div id="commentsList"></div>`;
+  if (PROFILE.is_leader || PROFILE.is_admin){
+    html += `
+      <div class="no-print">
+        <label>Add a comment</label>
+        <textarea id="newComment" placeholder="Your feedback…"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;">
+          <input type="checkbox" id="isWayForward" style="width:auto;"> Flag as official "Way Forward"
+        </label>
+        <button class="btn btn-primary" style="margin-top:10px;" onclick="postComment('${r.id}')">Post</button>
+      </div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+
+  renderFormSectionsReadOnly(schema, document.getElementById('formSections'));
+  updateDashboard(schema);
+  loadComments(r.id);
+  markReportViewed(reportId);
+
+  if (commentsChannel) sb.removeChannel(commentsChannel);
+  commentsChannel = sb.channel('comments-' + r.id)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'report_comments', filter: `report_id=eq.${r.id}` },
+      () => { loadComments(r.id); markReportViewed(reportId); })
+    .subscribe();
+}
+
+async function markReportViewed(reportId){
+  try {
+    await sb.from('report_views').upsert(
+      { report_id: reportId, viewer_id: PROFILE.id, last_viewed_at: new Date().toISOString() },
+      { onConflict: 'report_id,viewer_id' }
+    );
+  } catch (e) { /* non-critical — never block the view over this */ }
+}
+
+async function loadComments(reportId){
+  const { data: comments, error } = await sb.from('report_comments')
+    .select('*, profiles(full_name)').eq('report_id', reportId).order('created_at', { ascending: true });
+  const box = document.getElementById('commentsList');
+  if (!box) return;
+  if (error){ box.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  if (!comments || !comments.length){ box.innerHTML = `<p style="color:var(--slate);font-size:13px;">No comments yet.</p>`; return; }
+  box.innerHTML = comments.map(c => `
+    <div class="comment ${c.is_way_forward ? 'way-forward' : ''}">
+      <span class="who">${c.profiles?.full_name || 'Someone'}</span><span class="when">${fmtDate(c.created_at)}</span>
+      <div class="body">${c.comment.replace(/</g,'&lt;')}</div>
+    </div>
+  `).join('');
+}
+
+async function postComment(reportId){
+  const text = document.getElementById('newComment').value.trim();
+  if (!text) return;
+  const isWF = document.getElementById('isWayForward').checked;
+  const { error } = await sb.from('report_comments').insert({
+    report_id: reportId, author_id: PROFILE.id, comment: text, is_way_forward: isWF,
+  });
+  if (!error){
+    document.getElementById('newComment').value = '';
+    document.getElementById('isWayForward').checked = false;
+    loadComments(reportId);
+    fetch('/.netlify/functions/notify-comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reportId, authorId: PROFILE.id, authorName: PROFILE.full_name, comment: text, isWayForward: isWF }),
+    }).catch(() => {});
+  }
+}
+
+/* ================================================================
+   ADMIN  (manage people)
+   ================================================================ */
+async function renderAdmin(){
+  const el = document.getElementById('viewAdmin');
+  const { year, month } = todayUgandaDay();
+  el.innerHTML = `<div class="card"><h2>Manage People</h2><div id="peopleTable">Loading…</div></div>
+    <div class="card"><h3 style="margin-top:0;">Reopen a Late Submission</h3>
+      <p style="color:var(--slate);font-size:13px;margin-top:-6px;">
+        Grants one department permission to submit or edit their ${monthName(month)} ${year} report even though the 5th has passed.
+      </p>
+      <div class="field-grid">
+        <div><label>Department</label>
+          <select id="reopenDept">${DEPARTMENTS.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}</select>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="reopenSubmission()">Reopen for ${monthName(month)} ${year}</button>
+      <div id="reopenMsg"></div>
+      <div id="activeOverrides" style="margin-top:16px;"></div>
+    </div>
+    <div class="card"><h3 style="margin-top:0;" id="personFormTitle">Add a Person</h3>
+      <div class="field-grid">
+        <div><label>Full Name</label><input id="npName" type="text"></div>
+        <div><label>Email</label><input id="npEmail" type="email"></div>
+        <div><label>Role Title</label><input id="npTitle" type="text" placeholder="e.g. Farm Manager"></div>
+        <div><label>Department (if they submit a report)</label>
+          <select id="npDept"><option value="">— None —</option>
+            ${DEPARTMENTS.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="npLeader" style="width:auto;"> Leader (sees &amp; comments on every report)</label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="npAdmin" style="width:auto;"> Admin</label>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-primary" id="npSubmitBtn" onclick="savePerson()">Create Account</button>
+        <button class="btn btn-secondary hidden" id="npCancelBtn" onclick="cancelEditPerson()">Cancel</button>
+      </div>
+      <div id="adminMsg"></div>
+    </div>`;
+  loadPeople();
+  loadActiveOverrides();
+}
+
+let editingPersonId = null;
+
+async function reopenSubmission(){
+  const { year, month } = todayUgandaDay();
+  const deptId = document.getElementById('reopenDept').value;
+  const msg = document.getElementById('reopenMsg');
+  const { error } = await sb.from('submission_overrides').insert({
+    department_id: deptId, report_month: month, report_year: year, granted_by: PROFILE.id,
+  });
+  if (error){
+    msg.innerHTML = error.code === '23505'
+      ? `<div class="note-msg">Already reopened for this department this month.</div>`
+      : `<div class="error-msg">${error.message}</div>`;
+    return;
+  }
+  msg.innerHTML = `<div class="note-msg">Done — that department can now submit or edit their report for ${monthName(month)} ${year}.</div>`;
+  loadActiveOverrides();
+}
+
+async function loadActiveOverrides(){
+  const { year, month } = todayUgandaDay();
+  const { data } = await sb.from('submission_overrides')
+    .select('*, departments(name)').eq('report_month', month).eq('report_year', year);
+  const box = document.getElementById('activeOverrides');
+  if (!box) return;
+  if (!data || !data.length){ box.innerHTML = `<p style="color:var(--slate);font-size:13px;">No late-submission overrides active this month.</p>`; return; }
+  box.innerHTML = `<p style="font-size:13px;color:var(--slate);margin-bottom:6px;">Currently reopened for ${monthName(month)} ${year}:</p>` +
+    data.map(o => `<span class="pill">${o.departments.name}</span>`).join(' ');
+}
+
+async function loadPeople(){
+  const { data: people, error } = await sb.from('profiles').select('*, departments(name)').order('full_name');
+  const box = document.getElementById('peopleTable');
+  if (error){ box.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  window._peopleCache = people;
+  box.innerHTML = `<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>
+    ${people.map(p => `<tr>
+      <td>${p.full_name}</td><td>${p.email}</td><td>${p.role_title || ''}</td>
+      <td>${p.departments ? `<span class="pill">${p.departments.name}</span>` : ''}${p.is_leader?'<span class="pill">Leader</span>':''}${p.is_admin?'<span class="pill">Admin</span>':''}</td>
+      <td><button class="btn btn-secondary" style="padding:5px 12px;font-size:12px;" onclick="startEditPerson('${p.id}')">Edit</button></td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+
+function startEditPerson(id){
+  const p = (window._peopleCache || []).find(x => x.id === id);
+  if (!p) return;
+  editingPersonId = id;
+  document.getElementById('npName').value = p.full_name || '';
+  document.getElementById('npEmail').value = p.email || '';
+  document.getElementById('npTitle').value = p.role_title || '';
+  document.getElementById('npDept').value = p.department_id || '';
+  document.getElementById('npLeader').checked = !!p.is_leader;
+  document.getElementById('npAdmin').checked = !!p.is_admin;
+  document.getElementById('personFormTitle').textContent = `Edit ${p.full_name}`;
+  document.getElementById('npSubmitBtn').textContent = 'Save Changes';
+  document.getElementById('npCancelBtn').classList.remove('hidden');
+  document.getElementById('adminMsg').innerHTML = '';
+  document.getElementById('personFormTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEditPerson(){
+  editingPersonId = null;
+  document.getElementById('npName').value = '';
+  document.getElementById('npEmail').value = '';
+  document.getElementById('npTitle').value = '';
+  document.getElementById('npDept').value = '';
+  document.getElementById('npLeader').checked = false;
+  document.getElementById('npAdmin').checked = false;
+  document.getElementById('personFormTitle').textContent = 'Add a Person';
+  document.getElementById('npSubmitBtn').textContent = 'Create Account';
+  document.getElementById('npCancelBtn').classList.add('hidden');
+  document.getElementById('adminMsg').innerHTML = '';
+}
+
+async function savePerson(){
+  const payload = {
+    full_name: document.getElementById('npName').value.trim(),
+    email: document.getElementById('npEmail').value.trim(),
+    role_title: document.getElementById('npTitle').value.trim(),
+    department_id: document.getElementById('npDept').value || null,
+    is_leader: document.getElementById('npLeader').checked,
+    is_admin: document.getElementById('npAdmin').checked,
+  };
+  if (!payload.full_name || !payload.email){
+    document.getElementById('adminMsg').innerHTML = `<div class="error-msg">Name and email are required.</div>`;
+    return;
+  }
+
+  const msg = document.getElementById('adminMsg');
+  msg.innerHTML = editingPersonId ? 'Saving…' : 'Creating…';
+
+  const isEdit = !!editingPersonId;
+  const url = isEdit ? '/.netlify/functions/update-user' : '/.netlify/functions/create-user';
+  const body = isEdit ? { ...payload, userId: editingPersonId } : payload;
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify(body),
+    });
+
+    let out;
+    try { out = await res.json(); }
+    catch (parseErr) { throw new Error(`Server returned an unexpected response (status ${res.status}). This usually means the Netlify function itself failed — check your Supabase env vars are set correctly.`); }
+
+    if (!res.ok) throw new Error(out.error || `Request failed (status ${res.status}).`);
+
+    if (isEdit){
+      msg.innerHTML = `<div class="note-msg">Saved. ${payload.full_name}'s details have been updated${out.emailChanged ? ' — their login email changed too, let them know.' : ''}.</div>`;
+      cancelEditPerson();
+    } else {
+      msg.innerHTML = `<div class="note-msg">Account created. Temporary password: <b>${out.tempPassword}</b> — share this with ${payload.full_name} directly (WhatsApp/SMS), they should change it after first login.</div>`;
+    }
+    loadPeople();
+  } catch (err) {
+    msg.innerHTML = `<div class="error-msg">${err.message}</div>`;
+  }
+}
+
+/* ---------------------------------------------------------------- BOOT ---------------------------------------------------------------- */
+(async function boot(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await bootAfterLogin();
+})();
+</script>
+</body>
+</html>
