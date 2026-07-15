@@ -186,13 +186,29 @@
     <nav id="mainNav"></nav>
     <div class="who">
       <span id="whoAmI"></span>
+      <button onclick="openChangePassword()">Change Password</button>
       <button onclick="doLogout()">Sign out</button>
     </div>
   </div>
   <main>
+    <div id="changePasswordModal" class="hidden" style="position:fixed;inset:0;background:rgba(28,35,33,0.45);z-index:50;display:flex;align-items:center;justify-content:center;">
+      <div class="card" style="width:360px;margin:0;">
+        <h3 style="margin-top:0;">Change Your Password</h3>
+        <label>New Password</label>
+        <input type="password" id="newPassword1" autocomplete="new-password">
+        <label>Confirm New Password</label>
+        <input type="password" id="newPassword2" autocomplete="new-password">
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button class="btn btn-primary" onclick="submitChangePassword()">Update Password</button>
+          <button class="btn btn-secondary" onclick="closeChangePassword()">Cancel</button>
+        </div>
+        <div id="changePasswordMsg"></div>
+      </div>
+    </div>
     <div id="viewMyReport"></div>
     <div id="viewAllReports"></div>
     <div id="viewReportDetail"></div>
+    <div id="viewExecReport"></div>
     <div id="viewAdmin"></div>
   </main>
 </div>
@@ -232,6 +248,29 @@ async function doLogout(){
   location.reload();
 }
 
+function openChangePassword(){
+  document.getElementById('newPassword1').value = '';
+  document.getElementById('newPassword2').value = '';
+  document.getElementById('changePasswordMsg').innerHTML = '';
+  document.getElementById('changePasswordModal').classList.remove('hidden');
+}
+function closeChangePassword(){
+  document.getElementById('changePasswordModal').classList.add('hidden');
+}
+async function submitChangePassword(){
+  const p1 = document.getElementById('newPassword1').value;
+  const p2 = document.getElementById('newPassword2').value;
+  const msg = document.getElementById('changePasswordMsg');
+  if (p1.length < 6){ msg.innerHTML = `<div class="error-msg">Password must be at least 6 characters.</div>`; return; }
+  if (p1 !== p2){ msg.innerHTML = `<div class="error-msg">The two passwords don't match.</div>`; return; }
+  msg.innerHTML = 'Updating…';
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  if (error){ msg.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+  msg.innerHTML = `<div class="note-msg">Password updated. You'll use the new password next time you sign in.</div>`;
+  setTimeout(closeChangePassword, 1800);
+}
+
+
 async function bootAfterLogin(){
   const { data: { user } } = await sb.auth.getUser();
   CURRENT_USER = user;
@@ -252,7 +291,11 @@ async function bootAfterLogin(){
   document.getElementById('whoAmI').textContent = `${PROFILE.full_name}${PROFILE.role_title ? ' · ' + PROFILE.role_title : ''}`;
 
   buildNav();
-  navigate(PROFILE.department_id ? 'myReport' : (PROFILE.is_leader || PROFILE.is_admin ? 'allReports' : 'myReport'));
+  const landing = PROFILE.department_id ? 'myReport'
+    : (PROFILE.is_ministry_manager && !PROFILE.is_leader ? 'execReport'
+    : (PROFILE.is_leader || PROFILE.is_admin ? 'allReports'
+    : (PROFILE.is_ministry_manager || PROFILE.is_director ? 'execReport' : 'myReport')));
+  navigate(landing);
 }
 
 function buildNav(){
@@ -266,6 +309,7 @@ function buildNav(){
   };
   if (PROFILE.department_id) addBtn('myReport', 'My Report');
   if (PROFILE.is_leader || PROFILE.is_admin) addBtn('allReports', 'All Reports');
+  if (PROFILE.is_ministry_manager || PROFILE.is_director || PROFILE.is_admin) addBtn('execReport', 'Executive Report');
   if (PROFILE.is_admin) addBtn('admin', 'Admin');
 }
 
@@ -273,6 +317,7 @@ let reportDetailReturnTo = 'allReports';
 
 function handleReportDetailBack(){
   if (reportDetailReturnTo === 'myReport'){ navigate('myReport'); return; }
+  if (reportDetailReturnTo === 'execReport'){ navigate('execReport'); return; }
   if (reportDetailReturnTo === 'deptReports' && lastOpenDeptId){
     showView('allReports');
     openDepartmentReports(lastOpenDeptId);
@@ -283,7 +328,7 @@ function handleReportDetailBack(){
 
 function showView(key){
   currentView = key;
-  ['myReport','allReports','reportDetail','admin'].forEach(k => {
+  ['myReport','allReports','reportDetail','execReport','admin'].forEach(k => {
     document.getElementById('view' + k[0].toUpperCase() + k.slice(1)).classList.add('hidden');
   });
   document.querySelectorAll('#mainNav button').forEach(b => b.classList.toggle('active', b.dataset.key === key));
@@ -294,6 +339,7 @@ function navigate(key){
   showView(key);
   if (key === 'myReport') renderMyDashboard();
   if (key === 'allReports') renderAllReports();
+  if (key === 'execReport') renderExecReport();
   if (key === 'admin') renderAdmin();
 }
 
@@ -826,7 +872,8 @@ async function openReportDetail(reportId){
   const schema = window.SCHEMAS[r.departments.slug];
   formState = r.data || {};
 
-  const backLabel = reportDetailReturnTo === 'myReport' ? '← Back to my dashboard' : '← Back to reports';
+  const backLabel = reportDetailReturnTo === 'myReport' ? '← Back to my dashboard'
+    : (reportDetailReturnTo === 'execReport' ? '← Back to executive report' : '← Back to reports');
   let html = `<div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <button class="btn btn-secondary" onclick="handleReportDetailBack()">${backLabel}</button>
       <button class="btn btn-secondary" onclick="window.print()">🖶 Print / Save as PDF</button>
@@ -905,6 +952,281 @@ async function postComment(reportId){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reportId, authorId: PROFILE.id, authorName: PROFILE.full_name, comment: text, isWayForward: isWF }),
     }).catch(() => {});
+  }
+}
+
+/* ================================================================
+   MINISTRY MANAGER EXECUTIVE REPORT
+   Auto-pulls department dashboard figures from submitted reports for the
+   month, shows a submission checklist + traffic-light ratings, and lets the
+   Ministry Manager add executive analysis. Visible only to her, directors, admin.
+   ================================================================ */
+
+// The executive narrative fields the Ministry Manager fills in herself.
+// (Figures are auto-pulled; these are her judgement/analysis.)
+const EXEC_SECTIONS = [
+  { id: 'overallPerformance', label: 'Overall Ministry Performance', type: 'select', options: ['Excellent', 'Good', 'Fair', 'Needs Attention', 'Critical'] },
+  { id: 'execSummary', label: 'Executive Summary — achievements, developments, key challenges, risks, decisions required, overall ministry status', type: 'textarea' },
+  { id: 'childWelfare', label: 'Children\'s Welfare — management comments', type: 'textarea' },
+  { id: 'education', label: 'Education — management analysis', type: 'textarea' },
+  { id: 'medical', label: 'Medical & Health — management analysis', type: 'textarea' },
+  { id: 'socialWork', label: 'Social Work & Community Engagement — management analysis', type: 'textarea' },
+  { id: 'financial', label: 'Financial Performance — management analysis', type: 'textarea' },
+  { id: 'hr', label: 'Human Resources — management analysis', type: 'textarea' },
+  { id: 'infrastructure', label: 'Infrastructure & Facilities — management analysis', type: 'textarea' },
+  { id: 'ict', label: 'ICT & Digital Services — management analysis', type: 'textarea' },
+  { id: 'farm', label: 'Farm & Production — management analysis', type: 'textarea' },
+  { id: 'transport', label: 'Transport & Fleet — management analysis', type: 'textarea' },
+  { id: 'security', label: 'Security — risk assessment & analysis', type: 'textarea' },
+  { id: 'procurement', label: 'Procurement & Stores — management analysis', type: 'textarea' },
+  { id: 'compliance', label: 'Compliance & Governance — child protection, financial, procurement, HR, statutory compliance status & analysis', type: 'textarea' },
+  { id: 'achievements', label: 'Major Achievements of the Month', type: 'textarea' },
+  { id: 'challenges', label: 'Major Challenges', type: 'textarea' },
+  { id: 'strategicPriorities', label: 'Strategic Priorities for Next Month', type: 'textarea' },
+  { id: 'recommendations', label: 'Recommendations to Executive Director, Board, Finance Committee, Management, Department Heads, Donors, Partners', type: 'textarea' },
+];
+
+let execFormState = {};
+let execReportRow = null;
+
+async function renderExecReport(){
+  const el = document.getElementById('viewExecReport');
+  el.innerHTML = `<div class="card">Loading…</div>`;
+  const { year, month } = todayUgandaDay();
+
+  // Pull the current month's executive report (if any) + all submitted dept reports for aggregation.
+  const [{ data: existing }, { data: deptReports }] = await Promise.all([
+    sb.from('executive_reports').select('*').eq('report_month', month).eq('report_year', year).maybeSingle(),
+    sb.from('monthly_reports').select('*, departments(name, slug)').eq('report_month', month).eq('report_year', year),
+  ]);
+
+  execReportRow = existing || null;
+  execFormState = (existing && existing.data) ? JSON.parse(JSON.stringify(existing.data)) : {};
+
+  const canEdit = PROFILE.is_ministry_manager && (withinWindow() || PROFILE.is_admin) && (!existing || existing.status !== 'submitted');
+  const isSubmitted = existing && existing.status === 'submitted';
+
+  // Build the aggregation from submitted department reports.
+  const submittedByDept = {};
+  (deptReports || []).forEach(r => { if (r.status === 'submitted') submittedByDept[r.departments.slug] = r; });
+
+  let html = `<div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div></div>
+      <button class="btn btn-secondary" onclick="window.print()">🖶 Print / Save as PDF</button>
+    </div>`;
+  html += `<div class="card"><h2 style="margin-top:0;">Ministry Manager Executive Report</h2>
+    <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} ·
+      ${isSubmitted ? '<span class="chip chip-submitted">Submitted</span>'
+        : (canEdit ? '<span class="chip chip-draft">Draft — due by the 5th</span>'
+        : '<span class="chip chip-locked">' + (PROFILE.is_ministry_manager ? 'Window closed' : 'Awaiting submission') + '</span>')}
+    </p>`;
+
+  // ---- Ministry-wide dashboard (auto-pulled) ----
+  const totals = computeMinistryTotals(submittedByDept);
+  html += `<div class="dash-grid">` + [
+    ['👶', 'Total Children in Care', totals.totalChildren],
+    ['🎓', 'Total Learners', totals.totalLearners],
+    ['❤️', 'Medical Cases', totals.medicalCases],
+    ['🛡️', 'Safeguarding Cases', totals.safeguardingCases],
+    ['👨‍👩‍👧', 'Family Visits', totals.familyVisits],
+    ['🚗', 'Operational Vehicles', totals.operationalVehicles],
+    ['🌾', 'Farm Income (UGX)', totals.farmIncome],
+    ['💰', 'Ministry Income (UGX)', totals.ministryIncome],
+    ['💸', 'Ministry Expenditure (UGX)', totals.ministryExpenditure],
+    ['📈', 'Net Position (UGX)', totals.ministryIncome - totals.ministryExpenditure],
+  ].map(([icon, label, val]) => `<div class="dash-card"><span class="icon">${icon}</span><div class="val">${(val||0).toLocaleString()}</div><div class="lbl">${label}</div></div>`).join('') + `</div>`;
+  html += `</div>`;
+
+  // ---- Submission checklist + traffic-light ----
+  html += `<div class="card"><h3 style="margin-top:0;">Department Submission & Performance</h3>
+    <p style="color:var(--slate);font-size:12px;margin-top:-6px;">Auto-pulled from each department's submitted report for ${monthName(month)} ${year}. Ratings come from each head's own "Overall Performance" selection.</p>
+    <table class="admin-table"><thead><tr><th>Department</th><th>Status</th><th>Performance</th><th></th></tr></thead><tbody>`;
+  DEPARTMENTS.forEach(d => {
+    const r = submittedByDept[d.slug];
+    if (r){
+      const perf = (r.data && (r.data.performance)) || '—';
+      const light = perf === 'Excellent' || perf === 'Good' ? '🟢' : (perf === 'Fair' ? '🟡' : (perf === 'Needs Attention' || perf === 'Poor' ? '🔴' : '⚪'));
+      html += `<tr><td>${d.name}</td><td><span class="chip chip-submitted">Submitted</span></td><td>${light} ${perf}</td>
+        <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="viewReportFromExec('${r.id}')">View</button></td></tr>`;
+    } else {
+      html += `<tr><td>${d.name}</td><td><span class="chip chip-locked">Not Submitted</span></td><td>—</td><td></td></tr>`;
+    }
+  });
+  html += `</tbody></table></div>`;
+
+  // ---- Editable / read-only executive analysis ----
+  html += `<div class="card"><h3 style="margin-top:0;">Executive Analysis</h3><div id="execSections"></div>`;
+  if (canEdit){
+    html += `<div style="display:flex;gap:10px;margin-top:18px;" class="no-print">
+        <button class="btn btn-secondary" id="execSaveDraft">Save Draft</button>
+        <button class="btn btn-primary" id="execSubmit">Submit to Directors</button>
+      </div><div id="execMsg"></div>`;
+  }
+  html += `</div>`;
+
+  // ---- Comments (directors' final directives) ----
+  html += `<div class="card"><h3 style="margin-top:0;">Directors' Comments &amp; Final Directives</h3><div id="execCommentsList"></div>`;
+  if ((PROFILE.is_director || PROFILE.is_admin) && existing){
+    html += `<div class="no-print">
+      <label>Add a comment / directive</label>
+      <textarea id="execNewComment" placeholder="Your directive…"></textarea>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="execIsWayForward" style="width:auto;"> Flag as official "Final Directive"</label>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="postExecComment()">Post</button>
+    </div>`;
+  }
+  html += `</div>`;
+
+  el.innerHTML = html;
+
+  renderExecSections(canEdit);
+  if (existing){ loadExecComments(existing.id); markExecViewed(existing.id); }
+
+  if (canEdit){
+    document.getElementById('execSaveDraft').onclick = () => saveExecReport(month, year, 'draft');
+    document.getElementById('execSubmit').onclick = () => submitExecReport(month, year);
+  }
+}
+
+function computeMinistryTotals(byDept){
+  const d = (slug) => (byDept[slug] && byDept[slug].data) ? byDept[slug].data : null;
+  const T = { totalChildren:0, totalLearners:0, medicalCases:0, safeguardingCases:0, familyVisits:0, operationalVehicles:0, farmIncome:0, ministryIncome:0, ministryExpenditure:0 };
+
+  const ch = d('childrens_home');
+  if (ch){ T.totalChildren = sum(ch.homeSummary, 'boys') + sum(ch.homeSummary, 'girls'); }
+
+  const sch = d('school');
+  if (sch){ T.totalLearners = sum(sch.enrollment, 'boys') + sum(sch.enrollment, 'girls'); }
+
+  const med = d('medical');
+  if (med){ T.medicalCases = sum(med.attendance, 'count'); }
+
+  const sw = d('social_work');
+  if (sw){
+    T.safeguardingCases += count(sw.protectionCases);
+    T.familyVisits += countWhere(sw.familyStrengthening, r => r.homeVisitConducted === 'Yes');
+  }
+  const sec = d('security');
+  if (sec){ T.safeguardingCases += count(sec.childSafetyCases); }
+  if (ch){ T.safeguardingCases += count(ch.safeguarding); T.familyVisits += (ch.familyContact || []).reduce((t,r)=>t+(Number(r.homeVisits)||0),0); }
+
+  const tr = d('transport');
+  if (tr){ T.operationalVehicles = countWhere(tr.fleetInventory, r => r.currentStatus === 'Operational'); }
+
+  const farm = d('farm');
+  if (farm){ T.farmIncome = sum(farm.income, 'amount'); }
+
+  // Ministry income/expenditure — prefer Accounts dept figures, else sum across departments.
+  const acc = d('accounts');
+  if (acc){
+    T.ministryIncome = sum(acc.income, 'amount');
+    T.ministryExpenditure = sum(acc.expenditure, 'amount');
+  } else {
+    Object.values(byDept).forEach(r => {
+      const data = r.data || {};
+      T.ministryIncome += sum(data.income, 'amount');
+      T.ministryExpenditure += sum(data.expenses, 'amount') + sum(data.financials, 'amount') + sum(data.expenditure, 'amount');
+    });
+  }
+  return T;
+}
+
+function renderExecSections(canEdit){
+  const box = document.getElementById('execSections');
+  box.innerHTML = '';
+  EXEC_SECTIONS.forEach(f => {
+    if (!canEdit){
+      const wrap = document.createElement('div');
+      wrap.className = 'ro-field';
+      wrap.innerHTML = `<div class="ro-label">${f.label}</div><div class="ro-value">${(execFormState[f.id] || '—').toString().replace(/</g,'&lt;')}</div>`;
+      box.appendChild(wrap);
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'field-row';
+    const label = document.createElement('label');
+    label.textContent = f.label;
+    wrap.appendChild(label);
+    let input;
+    if (f.type === 'select'){
+      input = document.createElement('select');
+      input.innerHTML = '<option value="">Select…</option>' + f.options.map(o => `<option value="${o}">${o}</option>`).join('');
+      input.value = execFormState[f.id] || '';
+    } else {
+      input = document.createElement('textarea');
+      input.value = execFormState[f.id] || '';
+    }
+    input.oninput = input.onchange = () => { execFormState[f.id] = input.value; };
+    wrap.appendChild(input);
+    box.appendChild(wrap);
+  });
+}
+
+async function saveExecReport(month, year, status){
+  const msg = document.getElementById('execMsg');
+  if (msg) msg.innerHTML = status === 'submitted' ? 'Submitting…' : 'Saving…';
+  const payload = {
+    report_month: month, report_year: year, data: execFormState, status,
+    submitted_by: status === 'submitted' ? PROFILE.id : (execReportRow ? execReportRow.submitted_by : null),
+    submitted_at: status === 'submitted' ? new Date().toISOString() : (execReportRow ? execReportRow.submitted_at : null),
+  };
+  let result;
+  if (execReportRow){
+    result = await sb.from('executive_reports').update(payload).eq('id', execReportRow.id).select().single();
+  } else {
+    result = await sb.from('executive_reports').insert(payload).select().single();
+  }
+  if (result.error){ if (msg) msg.innerHTML = `<div class="error-msg">${result.error.message}</div>`; return null; }
+  execReportRow = result.data;
+  if (msg) msg.innerHTML = `<div class="note-msg">${status === 'submitted' ? 'Report submitted to the Directors.' : 'Draft saved.'}</div>`;
+  return result.data;
+}
+
+async function submitExecReport(month, year){
+  if (!confirm('Submit the executive report? The two Directors will be notified immediately, and you will not be able to edit it after submitting (unless an admin reopens it).')) return;
+  const saved = await saveExecReport(month, year, 'submitted');
+  if (!saved) return;
+  fetch('/.netlify/functions/send-exec-notification', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ month: monthName(month), year, submitterName: PROFILE.full_name, reportId: saved.id }),
+  }).catch(() => {});
+  navigate('execReport');
+}
+
+function viewReportFromExec(reportId){
+  reportDetailReturnTo = 'execReport';
+  openReportDetail(reportId);
+}
+
+async function markExecViewed(reportId){
+  try {
+    await sb.from('report_views').upsert({ report_id: reportId, viewer_id: PROFILE.id, last_viewed_at: new Date().toISOString() }, { onConflict: 'report_id,viewer_id' });
+  } catch (e) {}
+}
+
+async function loadExecComments(execReportId){
+  const { data: comments } = await sb.from('report_comments')
+    .select('*, profiles(full_name)').eq('executive_report_id', execReportId).order('created_at', { ascending: true });
+  const box = document.getElementById('execCommentsList');
+  if (!box) return;
+  if (!comments || !comments.length){ box.innerHTML = `<p style="color:var(--slate);font-size:13px;">No comments from the Directors yet.</p>`; return; }
+  box.innerHTML = comments.map(c => `
+    <div class="comment ${c.is_way_forward ? 'way-forward' : ''}">
+      <span class="who">${c.profiles?.full_name || 'Director'}</span><span class="when">${fmtDate(c.created_at)}</span>
+      <div class="body">${c.comment.replace(/</g,'&lt;')}</div>
+    </div>`).join('');
+}
+
+async function postExecComment(){
+  const text = document.getElementById('execNewComment').value.trim();
+  if (!text || !execReportRow) return;
+  const isWF = document.getElementById('execIsWayForward').checked;
+  const { error } = await sb.from('report_comments').insert({
+    executive_report_id: execReportRow.id, author_id: PROFILE.id, comment: text, is_way_forward: isWF,
+  });
+  if (!error){
+    document.getElementById('execNewComment').value = '';
+    document.getElementById('execIsWayForward').checked = false;
+    loadExecComments(execReportRow.id);
   }
 }
 
