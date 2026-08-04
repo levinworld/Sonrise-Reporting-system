@@ -1176,7 +1176,6 @@ const MEDICAL_SCHEMA = {
     { label: 'Referrals Out', icon: '🔄', compute: (d) => { const r = (d.attendance || []).find(x => x.category === 'Referrals Out'); return r ? Number(r.count) || 0 : 0; } },
     { label: 'Special Needs Cases', icon: '🧩', compute: (d) => count(d.specialNeeds) },
     { label: 'Immunizations', icon: '💉', compute: (d) => Number(d.immunizations) || 0 },
-    { label: 'Stock-outs', icon: '📦', compute: (d) => countWhere(d.medicines, r => (Number(r.stockOutDays) || 0) > 0) },
     { label: 'Medical Expenditure', icon: '💰', compute: (d) => sum(d.financials, 'amount') },
   ],
   sections: [
@@ -1285,34 +1284,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'medicines', title: '9. Medicines & Medical Supplies',
-      fields: [
-        {
-          key: 'medicines', type: 'table', label: 'Medicines & Supplies',
-          columns: [
-            { key: 'itemName', label: 'Item Name', type: 'text' },
-            { key: 'opening', label: 'Opening Balance', type: 'number' },
-            { key: 'received', label: 'Received', type: 'number' },
-            { key: 'used', label: 'Used', type: 'number' },
-            { key: 'closing', label: 'Closing Balance', type: 'number', readOnly: true, auto: (r) => (Number(r.opening) || 0) + (Number(r.received) || 0) - (Number(r.used) || 0) },
-            { key: 'stockOutDays', label: 'Stock-out Days', type: 'number' },
-            { key: 'expiryConcerns', label: 'Expiry Concerns', type: 'text' },
-          ],
-        },
-      ],
-    },
-    {
-      id: 'equipment', title: '10. Equipment & Facility Status',
-      fields: [
-        { key: 'equipmentCondition', label: 'Equipment Condition', type: 'text' },
-        { key: 'faultyEquipment', label: 'Faulty Equipment', type: 'text' },
-        { key: 'repairsNeeded', label: 'Repairs Needed', type: 'text' },
-        { key: 'waterSanitation', label: 'Water and Sanitation Status', type: 'text' },
-        { key: 'powerChallenges', label: 'Power/Electricity Challenges', type: 'text' },
-      ],
-    },
-    {
-      id: 'infection', title: '11. Infection Prevention & Safety',
+      id: 'infection', title: '9. Infection Prevention & Safety',
       fields: [
         { key: 'protocolsFollowed', label: 'Protocols Followed?', type: 'yesno' },
         { key: 'handHygiene', label: 'Hand Hygiene Compliance', type: 'text' },
@@ -1321,7 +1293,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'childProtection', title: '12. Child Protection & Referrals',
+      id: 'childProtection', title: '10. Child Protection & Referrals',
       fields: [
         { key: 'protectionConcerns', label: 'Child Protection Concerns Identified', type: 'textarea' },
         { key: 'protectionReferrals', label: 'Referrals to Social Worker, Hospital, or Counselor', type: 'textarea' },
@@ -1329,7 +1301,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'outreach', title: '13. Community Outreach & Health Education',
+      id: 'outreach', title: '11. Community Outreach & Health Education',
       fields: [
         { key: 'healthEducationSessions', label: 'Health Education Sessions Conducted', type: 'number' },
         { key: 'outreachActivities', label: 'Outreach Activities Conducted', type: 'number' },
@@ -1338,7 +1310,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'financials', title: '14. Financial Summary',
+      id: 'financials', title: '12. Financial Summary',
       fields: [
         {
           key: 'financials', type: 'table', label: 'Expenses',
@@ -1351,19 +1323,19 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'challenges', title: '15. Key Challenges, Risks & Recommendations',
+      id: 'challenges', title: '13. Key Challenges, Risks & Recommendations',
       fields: [
         { key: 'challenges', label: 'Major challenges, health risks, recommendations for management', type: 'textarea' },
       ],
     },
     {
-      id: 'nextMonth', title: '16. Priorities & Plan for Next Month',
+      id: 'nextMonth', title: '14. Priorities & Plan for Next Month',
       fields: [
         { key: 'nextMonthPlans', label: 'Planned activities, urgent support required, targets for next month', type: 'textarea' },
       ],
     },
     {
-      id: 'declaration', title: '17. Declaration',
+      id: 'declaration', title: '15. Declaration',
       fields: [
         { key: 'declName', label: 'Name', type: 'text', autoFill: 'submitterName', readOnly: true },
         { key: 'declDate', label: 'Date', type: 'date', autoFill: 'today', readOnly: true },

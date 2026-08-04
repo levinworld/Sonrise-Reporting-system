@@ -87,7 +87,7 @@ create table if not exists report_comments (
 -- Returns true if it is currently on/before the 5th of the month, Uganda time.
 create or replace function is_within_submission_window()
 returns boolean language sql stable as $$
-  select extract(day from (now() at time zone 'Africa/Kampala')) <= 5;
+  select extract(day from (now() at time zone 'Africa/Kampala')) <= 6;
 $$;
 
 -- Helper functions that check the current user's role WITHOUT re-triggering RLS
