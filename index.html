@@ -218,8 +218,8 @@
 /* =====================================================================
    CONFIG — replace with your Supabase project's values before deploying
    ===================================================================== */
-const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';
+const SUPABASE_URL = 'https://bthiwndaojiecunwkvlr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0aGl3bmRhb2ppZWN1bndrdmxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjQxMDAsImV4cCI6MjA5OTAwMDEwMH0.azkbA7AiGbjEAyoUom9xww95FIDeHQq90aEF-_oThoI';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let CURRENT_USER = null;   // Supabase auth user
@@ -441,17 +441,31 @@ async function renderMyDashboard(){
   el.innerHTML = html;
 }
 
-// Opening a report row from the dashboard: a DRAFT for the current reporting
-// period opens the editable form (so people can continue where they left off);
-// anything submitted, or a draft from a past period, opens read-only.
-function openMyReportRow(reportId, status, rMonth, rYear){
-  const { month, year } = reportingPeriod();
-  const isCurrentPeriod = (rMonth === month && rYear === year);
-  if (status === 'draft' && isCurrentPeriod){
-    renderMyReportForm();
+// Opening a report row from the dashboard:
+//  - A submitted report always opens read-only.
+//  - A draft opens the EDITABLE form as long as the submission window is open
+//    (or the user is admin / has an override). We deliberately do NOT require the
+//    draft's month to equal the current reporting period, because drafts created
+//    before the "previous-month" change carry the old month label — they should
+//    still be editable.
+async function openMyReportRow(reportId, status, rMonth, rYear){
+  if (status !== 'draft'){ viewMyPastReport(reportId); return; }
+
+  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
+  const { data: override } = await sb.from('submission_overrides')
+    .select('id').eq('department_id', dept.id).eq('report_month', rMonth).eq('report_year', rYear).maybeSingle();
+  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
+
+  if (windowOpen){
+    editDraftById(reportId, rMonth, rYear);
   } else {
     viewMyPastReport(reportId);
   }
+}
+
+function editDraftById(reportId, rMonth, rYear){
+  showView('myReport');
+  renderMyReportForm(rMonth, rYear);
 }
 
 async function loadDeptCommentsFeed(deptId){
@@ -483,12 +497,15 @@ function viewMyPastReport(reportId){
 /* ================================================================
    MY REPORT FORM  (the actual editable monthly submission)
    ================================================================ */
-async function renderMyReportForm(){
+async function renderMyReportForm(targetMonth, targetYear){
   const el = document.getElementById('viewMyReport');
   const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
   const schema = window.SCHEMAS[dept.slug];
   currentSchema = schema;
-  const { year, month } = reportingPeriod();
+  // Default to the current reporting period, but allow editing a specific
+  // existing draft (e.g. one saved under the old month before the change).
+  const period = (targetMonth && targetYear) ? { month: targetMonth, year: targetYear } : reportingPeriod();
+  const month = period.month, year = period.year;
 
   const { data: existing } = await sb.from('monthly_reports')
     .select('*').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year)
