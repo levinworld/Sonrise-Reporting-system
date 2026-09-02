@@ -1176,6 +1176,7 @@ const MEDICAL_SCHEMA = {
     { label: 'Referrals Out', icon: '🔄', compute: (d) => { const r = (d.attendance || []).find(x => x.category === 'Referrals Out'); return r ? Number(r.count) || 0 : 0; } },
     { label: 'Special Needs Cases', icon: '🧩', compute: (d) => count(d.specialNeeds) },
     { label: 'Immunizations', icon: '💉', compute: (d) => Number(d.immunizations) || 0 },
+    { label: 'Stock-outs', icon: '📦', compute: (d) => countWhere(d.medicines, r => (Number(r.stockOutDays) || 0) > 0) },
     { label: 'Medical Expenditure', icon: '💰', compute: (d) => sum(d.financials, 'amount') },
   ],
   sections: [
@@ -1284,7 +1285,34 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'infection', title: '9. Infection Prevention & Safety',
+      id: 'medicines', title: '9. Medicines & Medical Supplies',
+      fields: [
+        {
+          key: 'medicines', type: 'table', label: 'Medicines & Supplies',
+          columns: [
+            { key: 'itemName', label: 'Item Name', type: 'text' },
+            { key: 'opening', label: 'Opening Balance', type: 'number' },
+            { key: 'received', label: 'Received', type: 'number' },
+            { key: 'used', label: 'Used', type: 'number' },
+            { key: 'closing', label: 'Closing Balance', type: 'number', readOnly: true, auto: (r) => (Number(r.opening) || 0) + (Number(r.received) || 0) - (Number(r.used) || 0) },
+            { key: 'stockOutDays', label: 'Stock-out Days', type: 'number' },
+            { key: 'expiryConcerns', label: 'Expiry Concerns', type: 'text' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'equipment', title: '10. Equipment & Facility Status',
+      fields: [
+        { key: 'equipmentCondition', label: 'Equipment Condition', type: 'text' },
+        { key: 'faultyEquipment', label: 'Faulty Equipment', type: 'text' },
+        { key: 'repairsNeeded', label: 'Repairs Needed', type: 'text' },
+        { key: 'waterSanitation', label: 'Water and Sanitation Status', type: 'text' },
+        { key: 'powerChallenges', label: 'Power/Electricity Challenges', type: 'text' },
+      ],
+    },
+    {
+      id: 'infection', title: '11. Infection Prevention & Safety',
       fields: [
         { key: 'protocolsFollowed', label: 'Protocols Followed?', type: 'yesno' },
         { key: 'handHygiene', label: 'Hand Hygiene Compliance', type: 'text' },
@@ -1293,7 +1321,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'childProtection', title: '10. Child Protection & Referrals',
+      id: 'childProtection', title: '12. Child Protection & Referrals',
       fields: [
         { key: 'protectionConcerns', label: 'Child Protection Concerns Identified', type: 'textarea' },
         { key: 'protectionReferrals', label: 'Referrals to Social Worker, Hospital, or Counselor', type: 'textarea' },
@@ -1301,7 +1329,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'outreach', title: '11. Community Outreach & Health Education',
+      id: 'outreach', title: '13. Community Outreach & Health Education',
       fields: [
         { key: 'healthEducationSessions', label: 'Health Education Sessions Conducted', type: 'number' },
         { key: 'outreachActivities', label: 'Outreach Activities Conducted', type: 'number' },
@@ -1310,7 +1338,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'financials', title: '12. Financial Summary',
+      id: 'financials', title: '14. Financial Summary',
       fields: [
         {
           key: 'financials', type: 'table', label: 'Expenses',
@@ -1323,19 +1351,19 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'challenges', title: '13. Key Challenges, Risks & Recommendations',
+      id: 'challenges', title: '15. Key Challenges, Risks & Recommendations',
       fields: [
         { key: 'challenges', label: 'Major challenges, health risks, recommendations for management', type: 'textarea' },
       ],
     },
     {
-      id: 'nextMonth', title: '14. Priorities & Plan for Next Month',
+      id: 'nextMonth', title: '16. Priorities & Plan for Next Month',
       fields: [
         { key: 'nextMonthPlans', label: 'Planned activities, urgent support required, targets for next month', type: 'textarea' },
       ],
     },
     {
-      id: 'declaration', title: '15. Declaration',
+      id: 'declaration', title: '17. Declaration',
       fields: [
         { key: 'declName', label: 'Name', type: 'text', autoFill: 'submitterName', readOnly: true },
         { key: 'declDate', label: 'Date', type: 'date', autoFill: 'today', readOnly: true },
@@ -1356,8 +1384,6 @@ const SCHOOL_SCHEMA = {
     { label: 'Primary Enrollment', icon: '📚', compute: (d) => sum(d.primary, 'enrollment') },
     { label: 'Boarding Learners', icon: '🛏️', compute: (d) => Number(d.totalBoarders) || 0 },
     { label: 'Teaching Staff', icon: '👩‍🏫', compute: (d) => Number(d.teachingStaff) || 0 },
-    { label: 'Sports Activities', icon: '⚽', compute: (d) => count(d.sports) },
-    { label: 'Welfare Cases', icon: '❤️', compute: (d) => count(d.welfare) },
     { label: 'Discipline Cases', icon: '⚖️', compute: (d) => count(d.discipline) },
     { label: 'School Income', icon: '💰', compute: (d) => sum(d.income, 'amount') },
     { label: 'School Expenditure', icon: '💸', compute: (d) => sum(d.expenses, 'amount') },
@@ -1481,35 +1507,17 @@ const SCHOOL_SCHEMA = {
     {
       id: 'welfare', title: '8. Welfare Department',
       fields: [
-        {
-          key: 'welfare', type: 'table', label: 'Welfare Cases',
-          columns: [
-            { key: 'child', label: 'Child', type: 'text' },
-            { key: 'concern', label: 'Concern', type: 'text' },
-            { key: 'category', label: 'Category', type: 'select', options: ['Medical', 'Behaviour', 'Financial', 'Counseling', 'Family', 'Nutrition', 'Safeguarding'] },
-            { key: 'actionTaken', label: 'Action Taken', type: 'text' },
-            { key: 'followUp', label: 'Follow-up', type: 'text' },
-            { key: 'status', label: 'Status', type: 'select', options: ['Open', 'In Progress', 'Resolved'] },
-          ],
-        },
+        { key: 'welfareStatement', label: 'General Monthly Welfare Statement', type: 'textarea' },
+        { key: 'welfareChallenges', label: 'Welfare Challenges', type: 'textarea' },
+        { key: 'welfareRecommendations', label: 'Welfare Recommendations', type: 'textarea' },
       ],
     },
     {
-      id: 'sports', title: '9. Sports Department',
+      id: 'sports', title: '9. Co-curricular Activities Done This Month',
       fields: [
-        {
-          key: 'sports', type: 'table', label: 'Sports Activities',
-          columns: [
-            { key: 'sport', label: 'Sport', type: 'select', options: ['Football', 'Netball', 'Athletics', 'Volleyball', 'Music Dance & Drama', 'Chess', 'Other'] },
-            { key: 'activity', label: 'Activity', type: 'text' },
-            { key: 'classesInvolved', label: 'Classes Involved', type: 'text' },
-            { key: 'participants', label: 'Participants', type: 'number' },
-            { key: 'competition', label: 'Competition', type: 'text' },
-            { key: 'results', label: 'Results', type: 'text' },
-            { key: 'achievements', label: 'Achievements', type: 'text' },
-            { key: 'challenges', label: 'Challenges', type: 'text' },
-          ],
-        },
+        { key: 'cocurricularActivity', label: 'Activity This Month', type: 'textarea' },
+        { key: 'cocurricularChallenges', label: 'Challenges Encountered', type: 'textarea' },
+        { key: 'cocurricularRecommendations', label: 'Recommendations', type: 'textarea' },
       ],
     },
     {
@@ -1543,20 +1551,7 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'healthSafety', title: '12. Health & Safety',
-      fields: [
-        { key: 'medicalCases', label: 'Medical Cases', type: 'number' },
-        { key: 'firstAidCases', label: 'First Aid Cases', type: 'number' },
-        { key: 'hospitalReferrals', label: 'Hospital Referrals', type: 'number' },
-        { key: 'fireDrillConducted', label: 'Fire Drill Conducted?', type: 'yesno' },
-        { key: 'safetyInspections', label: 'Safety Inspections', type: 'text' },
-        { key: 'waterAvailability', label: 'Water Availability', type: 'text' },
-        { key: 'sanitation', label: 'Sanitation', type: 'text' },
-        { key: 'classroomCleanliness', label: 'Classroom Cleanliness', type: 'text' },
-      ],
-    },
-    {
-      id: 'assets', title: '13. School Assets & Infrastructure',
+      id: 'assets', title: '12. School Assets & Infrastructure',
       fields: [
         { key: 'condClassrooms', label: 'Classrooms', type: 'select', options: ['Excellent', 'Good', 'Fair', 'Poor'] },
         { key: 'condDormitories', label: 'Dormitories', type: 'select', options: ['Excellent', 'Good', 'Fair', 'Poor'] },
@@ -1575,12 +1570,13 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'stores', title: '14. School Stores & Learning Materials',
+      id: 'stores', title: '13. School Stores & Learning Materials',
       fields: [
         {
           key: 'stores', type: 'table', label: 'School Stores',
           columns: [
             { key: 'item', label: 'Item', type: 'text' },
+            { key: 'unit', label: 'Unit', type: 'select', options: ['Kg', 'g', 'Litres', 'Pieces', 'Packets', 'Boxes', 'Reams', 'Bags', 'Bottles', 'Other'] },
             { key: 'opening', label: 'Opening Stock', type: 'number' },
             { key: 'received', label: 'Received', type: 'number' },
             { key: 'issued', label: 'Issued', type: 'number' },
@@ -1592,28 +1588,33 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'financials', title: '15. Financial Summary',
+      id: 'financials', title: '14. Financial Summary',
       fields: [
         {
           key: 'income', type: 'table', label: 'Income',
           columns: [
-            { key: 'source', label: 'Source', type: 'select', options: ['School Fees', 'Community Payments', 'Bursary Support', 'Government Support', 'Other Income'] },
-            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
+            { key: 'source', label: 'Source', type: 'select', options: ['School Fees', 'Community Payments', 'Bursary Support', 'Government Support', 'Fundraising', 'Donations', 'Other Income'] },
+            { key: 'description', label: 'Description', type: 'text' },
+            { key: 'amount', label: 'Amount (UGX)', type: 'money' },
           ],
           totals: [{ column: 'amount', label: 'Total Income' }],
         },
         {
           key: 'expenses', type: 'table', label: 'Expenses',
           columns: [
-            { key: 'category', label: 'Category', type: 'select', options: ['Stationery', 'Meals', 'Utilities', 'Repairs', 'ICT', 'Sports', 'Maintenance', 'Other'] },
-            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
+            { key: 'category', label: 'Category', type: 'select', options: ['Stationery & Examinations', 'Transport', 'Car Hire', 'Rent', 'Meals', 'Utilities', 'Repairs', 'ICT', 'Sports & Workshops', 'Airtime', 'Medical', 'Salaries', 'Office Expenses', 'Mobilisation', 'Maintenance', 'Other'] },
+            { key: 'description', label: 'Description', type: 'text' },
+            { key: 'amount', label: 'Amount (UGX)', type: 'money' },
           ],
           totals: [{ column: 'amount', label: 'Total Expenses' }],
+        },
+        {
+          key: 'financialPosition', label: 'Outstanding Debts / Deficit / Balance Notes', type: 'textarea',
         },
       ],
     },
     {
-      id: 'community', title: '16. Community & Parent Engagement',
+      id: 'community', title: '15. Community & Parent Engagement',
       fields: [
         {
           key: 'community', type: 'table', label: 'Community & Parent Engagement',
@@ -1627,7 +1628,7 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'ministryLearners', title: '17. Ministry-supported Learners',
+      id: 'ministryLearners', title: '16. Ministry-supported Learners',
       fields: [
         {
           key: 'ministryLearners', type: 'table', label: 'Ministry-supported Learners',
@@ -1643,25 +1644,25 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'challenges', title: '18. Operational Challenges',
+      id: 'challenges', title: '17. Operational Challenges',
       fields: [
         { key: 'challenges', label: 'Academic, infrastructure, financial, staffing, learner welfare, ICT, sports, boarding challenges', type: 'textarea' },
       ],
     },
     {
-      id: 'nextMonth', title: '19. Priorities for Next Month',
+      id: 'nextMonth', title: '18. Priorities for Next Month',
       fields: [
         { key: 'nextMonthPlans', label: 'Teaching priorities, infrastructure improvements, training, sports, ICT, welfare, community engagement, support required', type: 'textarea' },
       ],
     },
     {
-      id: 'recommendations', title: '20. Recommendations',
+      id: 'recommendations', title: '19. Recommendations',
       fields: [
         { key: 'recommendations', label: 'Recommendations to Management, Finance, ICT, Transport, Farm, Medical, HR, Parents, Donors', type: 'textarea' },
       ],
     },
     {
-      id: 'declaration', title: '21. Declaration',
+      id: 'declaration', title: '20. Declaration',
       fields: [
         { key: 'declName', label: 'Principal', type: 'text', autoFill: 'submitterName', readOnly: true },
         { key: 'declDate', label: 'Date', type: 'date', autoFill: 'today', readOnly: true },

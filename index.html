@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root{
     --paper:#F5F6F1;
@@ -350,18 +351,7 @@ function todayUgandaDay(){
   const now = new Date(Date.now() + 3*60*60*1000);
   return { day: now.getUTCDate(), month: now.getUTCMonth()+1, year: now.getUTCFullYear() };
 }
-// The month a report is ABOUT is the PREVIOUS calendar month. Reports for that
-// month are filled/submitted during the first days of the new month.
-// e.g. opening the system any time in July means you're reporting on June.
-function reportingPeriod(){
-  const t = todayUgandaDay();
-  let month = t.month - 1;
-  let year = t.year;
-  if (month === 0){ month = 12; year -= 1; }
-  return { month, year };
-}
-// Submission window: 1st through 6th (inclusive) of the new month.
-function withinWindow(){ return todayUgandaDay().day <= 6; }
+function withinWindow(){ return todayUgandaDay().day <= 5; }
 function fmtDate(d){ return d ? new Date(d).toLocaleDateString() : ''; }
 
 /* ================================================================
@@ -387,7 +377,7 @@ async function renderMyDashboard(){
     return;
   }
 
-  const { year, month } = reportingPeriod();
+  const { year, month } = todayUgandaDay();
   const reports = await loadDeptReportsWithStatus(dept.id);
   const current = reports.find(r => r.report_month === month && r.report_year === year);
 
@@ -398,7 +388,7 @@ async function renderMyDashboard(){
   let html = `<div class="card"><h2 style="margin-top:0;">${dept.name}</h2>
     <div class="this-month-box">
       <div class="status-block">
-        <span class="m">Reporting for ${monthName(month)} ${year}</span>
+        <span class="m">${monthName(month)} ${year}</span>
         ${current && current.status === 'submitted' ? '<span class="chip chip-submitted">Submitted</span>' :
           (windowOpen ? `<span class="chip chip-draft">${current ? 'Draft in progress' : 'Not started'}</span>` : '<span class="chip chip-locked">Window closed</span>')}
       </div>`;
@@ -410,7 +400,7 @@ async function renderMyDashboard(){
   }
   html += `</div>`;
   if (!(current && current.status === 'submitted') && !windowOpen){
-    html += `<div class="error-msg" style="margin-top:12px;">The submission window for this month closed after the 6th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div>`;
+    html += `<div class="error-msg" style="margin-top:12px;">The submission window for this month closed after the 5th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div>`;
   }
   html += `</div>`;
 
@@ -431,41 +421,14 @@ async function renderMyDashboard(){
   html += !reports.length
     ? `<p style="color:var(--slate);font-size:13px;">No reports submitted yet.</p>`
     : reports.map(r => `
-        <div class="report-row st-${r.status}" onclick="openMyReportRow('${r.id}', '${r.status}', ${r.report_month}, ${r.report_year})">
+        <div class="report-row st-${r.status}" onclick="viewMyPastReport('${r.id}')">
           <div><div class="dept">${monthName(r.report_month)} ${r.report_year}</div>
-            <div class="meta">${r.submitted_at ? 'Submitted ' + fmtDate(r.submitted_at) : 'Draft — tap to continue editing'}</div></div>
+            <div class="meta">${r.submitted_at ? 'Submitted ' + fmtDate(r.submitted_at) : 'Draft'}</div></div>
           <span class="chip chip-${r.status}">${r.status}</span>
         </div>`).join('');
   html += `</div>`;
 
   el.innerHTML = html;
-}
-
-// Opening a report row from the dashboard:
-//  - A submitted report always opens read-only.
-//  - A draft opens the EDITABLE form as long as the submission window is open
-//    (or the user is admin / has an override). We deliberately do NOT require the
-//    draft's month to equal the current reporting period, because drafts created
-//    before the "previous-month" change carry the old month label — they should
-//    still be editable.
-async function openMyReportRow(reportId, status, rMonth, rYear){
-  if (status !== 'draft'){ viewMyPastReport(reportId); return; }
-
-  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
-  const { data: override } = await sb.from('submission_overrides')
-    .select('id').eq('department_id', dept.id).eq('report_month', rMonth).eq('report_year', rYear).maybeSingle();
-  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
-
-  if (windowOpen){
-    editDraftById(reportId, rMonth, rYear);
-  } else {
-    viewMyPastReport(reportId);
-  }
-}
-
-function editDraftById(reportId, rMonth, rYear){
-  showView('myReport');
-  renderMyReportForm(rMonth, rYear);
 }
 
 async function loadDeptCommentsFeed(deptId){
@@ -497,15 +460,12 @@ function viewMyPastReport(reportId){
 /* ================================================================
    MY REPORT FORM  (the actual editable monthly submission)
    ================================================================ */
-async function renderMyReportForm(targetMonth, targetYear){
+async function renderMyReportForm(){
   const el = document.getElementById('viewMyReport');
   const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
   const schema = window.SCHEMAS[dept.slug];
   currentSchema = schema;
-  // Default to the current reporting period, but allow editing a specific
-  // existing draft (e.g. one saved under the old month before the change).
-  const period = (targetMonth && targetYear) ? { month: targetMonth, year: targetYear } : reportingPeriod();
-  const month = period.month, year = period.year;
+  const { year, month } = todayUgandaDay();
 
   const { data: existing } = await sb.from('monthly_reports')
     .select('*').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year)
@@ -526,16 +486,17 @@ async function renderMyReportForm(targetMonth, targetYear){
   let html = `<button class="btn btn-secondary" onclick="navigate('myReport')" style="margin-bottom:14px;">← Back to my dashboard</button>`;
   html += `<div class="card"><h2>${schema.title}</h2>
     <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} report ·
-      ${windowOpen ? '<span class="chip chip-draft">Draft — due by the 6th</span>' : '<span class="chip chip-locked">Submission window closed</span>'}
+      ${windowOpen ? '<span class="chip chip-draft">Draft — due by the 5th</span>' : '<span class="chip chip-locked">Submission window closed</span>'}
     </p>`;
 
   if (!windowOpen){
-    html += `<div class="error-msg">The submission window for this month closed after the 6th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div></div>`;
+    html += `<div class="error-msg">The submission window for this month closed after the 5th. Ask your admin to reopen this month for your department (Admin tab → Reopen a Late Submission).</div></div>`;
     el.innerHTML = html;
     return;
   }
 
   html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div>`;
   html += `<div style="display:flex;gap:10px;margin-top:20px;">
       <button class="btn btn-secondary" id="btnSaveDraft">Save Draft</button>
@@ -605,12 +566,27 @@ function renderField(f, schema, locked){
     input = document.createElement('input'); input.type = 'date'; input.value = formState[f.key] || '';
   } else if (f.type === 'number'){
     input = document.createElement('input'); input.type = 'number'; input.value = formState[f.key] ?? '';
+  } else if (f.type === 'money'){
+    input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric';
+    input.value = formatMoneyInput(formState[f.key]);
   } else {
     input = document.createElement('input'); input.type = 'text'; input.value = formState[f.key] || '';
   }
   input.disabled = !!f.readOnly || locked;
   input.oninput = input.onchange = () => {
-    formState[f.key] = (f.type === 'number') ? Number(input.value) : input.value;
+    if (f.type === 'number'){
+      formState[f.key] = Number(input.value);
+    } else if (f.type === 'money'){
+      const raw = parseMoneyInput(input.value);
+      formState[f.key] = raw;
+      const pos = input.selectionStart;
+      const before = input.value.length;
+      input.value = formatMoneyInput(raw);
+      const after = input.value.length;
+      input.setSelectionRange(pos + (after - before), pos + (after - before));
+    } else {
+      formState[f.key] = input.value;
+    }
     updateDashboard(schema);
     if (f.revealField) toggleReveal(f);
   };
@@ -628,40 +604,6 @@ function renderTable(f, schema, locked){
   table.className = 'data-table';
   box.appendChild(table);
 
-  // Lightweight update: refresh auto-calculated cells and the totals row WITHOUT
-  // rebuilding the table, so the input the user is typing in is never destroyed
-  // (that was what made the cursor jump out after every character).
-  function refreshComputed(){
-    const rows = formState[f.key];
-    // auto columns
-    const tbody = table.querySelector('tbody');
-    if (tbody){
-      Array.from(tbody.querySelectorAll('tr[data-row]')).forEach(tr => {
-        const idx = Number(tr.getAttribute('data-row'));
-        const row = rows[idx];
-        if (!row) return;
-        f.columns.forEach(col => {
-          if (col.auto){
-            const cell = tr.querySelector(`[data-auto="${col.key}"]`);
-            if (cell){
-              const val = col.auto(row);
-              row[col.key] = val;
-              cell.textContent = (typeof val === 'number') ? val.toLocaleString() : (val || '');
-            }
-          }
-        });
-      });
-    }
-    // totals row
-    if (f.totals){
-      f.totals.forEach(t => {
-        const cell = table.querySelector(`[data-total="${t.column}"]`);
-        if (cell) cell.textContent = t.label + ': ' + sumCol(rows, t.column).toLocaleString();
-      });
-    }
-    updateDashboard(schema);
-  }
-
   function redraw(){
     const rows = formState[f.key];
     let thead = '<tr>' + f.columns.map(c => `<th>${c.label}</th>`).join('') + (locked?'':'<th></th>') + '</tr>';
@@ -670,14 +612,12 @@ function renderTable(f, schema, locked){
 
     rows.forEach((row, idx) => {
       const tr = document.createElement('tr');
-      tr.setAttribute('data-row', idx);
       f.columns.forEach(col => {
         const td = document.createElement('td');
         if (col.showIf && !col.showIf(row)){ tr.appendChild(td); return; }
         if (col.auto){
           const val = col.auto(row);
           row[col.key] = val;
-          td.setAttribute('data-auto', col.key);
           td.textContent = (typeof val === 'number') ? val.toLocaleString() : val;
         } else {
           let inp;
@@ -689,28 +629,30 @@ function renderTable(f, schema, locked){
             inp = document.createElement('input'); inp.type='date'; inp.value = row[col.key] || '';
           } else if (col.type === 'number'){
             inp = document.createElement('input'); inp.type='number'; inp.value = row[col.key] ?? '';
+          } else if (col.type === 'money'){
+            inp = document.createElement('input'); inp.type='text'; inp.inputMode='numeric';
+            inp.value = formatMoneyInput(row[col.key]);
           } else {
             inp = document.createElement('input'); inp.type='text'; inp.value = row[col.key] || '';
           }
           inp.disabled = locked;
-
-          if (col.type === 'select'){
-            // A select change can flip showIf conditions on other columns, so a
-            // full redraw is warranted here — but selects don't hold a text cursor,
-            // so redrawing is harmless.
-            inp.onchange = () => {
+          inp.onchange = inp.oninput = () => {
+            if (col.type === 'number'){
+              row[col.key] = Number(inp.value);
+              redraw();
+            } else if (col.type === 'money'){
+              row[col.key] = parseMoneyInput(inp.value);
+              const pos = inp.selectionStart;
+              const before = inp.value.length;
+              inp.value = formatMoneyInput(row[col.key]);
+              const after = inp.value.length;
+              inp.setSelectionRange(pos + (after - before), pos + (after - before));
+            } else {
               row[col.key] = inp.value;
               redraw();
-              updateDashboard(schema);
-            };
-          } else {
-            // Text/number/date: update data + computed cells only. NO full redraw,
-            // so the cursor stays put and typing is continuous.
-            inp.oninput = () => {
-              row[col.key] = (col.type === 'number') ? Number(inp.value) : inp.value;
-              refreshComputed();
-            };
-          }
+            }
+            updateDashboard(schema);
+          };
           td.appendChild(inp);
         }
         tr.appendChild(td);
@@ -732,7 +674,7 @@ function renderTable(f, schema, locked){
       f.columns.forEach((col, i) => {
         const td = document.createElement('td');
         const t = f.totals.find(t => t.column === col.key);
-        if (t){ td.setAttribute('data-total', col.key); td.textContent = t.label + ': ' + sumCol(rows, col.key).toLocaleString(); }
+        if (t) td.textContent = t.label + ': ' + sumCol(rows, col.key).toLocaleString();
         tr.appendChild(td);
       });
       if (!locked) tr.appendChild(document.createElement('td'));
@@ -753,6 +695,19 @@ function renderTable(f, schema, locked){
   return box;
 }
 function sumCol(rows, key){ return (rows||[]).reduce((t,r)=>t+(Number(r[key])||0),0); }
+
+/* money field helpers: store a plain number in formState, display with thousands separators */
+function parseMoneyInput(str){
+  const cleaned = String(str || '').replace(/[^0-9.]/g, '');
+  const n = Number(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+function formatMoneyInput(val){
+  if (val === undefined || val === null || val === '') return '';
+  const n = Number(val);
+  if (isNaN(n)) return '';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
 
 /* ---------------------------------------------------------------- READ-ONLY RENDERING (viewing someone's submitted report) ---------------------------------------------------------------- */
 function displayValue(v){
@@ -832,6 +787,40 @@ function updateDashboard(schema){
     if (typeof val === 'number') val = val.toLocaleString();
     return `<div class="dash-card"><span class="icon">${d.icon}</span><div class="val">${val}</div><div class="lbl">${d.label}</div></div>`;
   }).join('');
+  renderFinanceChart();
+}
+
+let financeChartInstance = null;
+function renderFinanceChart(){
+  const canvas = document.getElementById('financeChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const hasIncome = Array.isArray(formState.income);
+  const hasExpenses = Array.isArray(formState.expenses);
+  if (!hasIncome && !hasExpenses){ canvas.style.display = 'none'; return; }
+
+  const totalIncome = sumCol(formState.income, 'amount');
+  const totalExpenses = sumCol(formState.expenses, 'amount');
+  if (totalIncome === 0 && totalExpenses === 0){ canvas.style.display = 'none'; return; }
+
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  if (financeChartInstance) financeChartInstance.destroy();
+  financeChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Income', 'Expenses'],
+      datasets: [{
+        label: 'Amount (UGX)',
+        data: [totalIncome, totalExpenses],
+        backgroundColor: ['#2E7D32', '#C62828'],
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expenses' } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString() } } },
+    },
+  });
 }
 
 async function saveReport(deptId, month, year, status){
@@ -972,6 +961,7 @@ async function openReportDetail(reportId){
     <p style="color:var(--slate);font-size:13px;">${r.departments.name} · ${monthName(r.report_month)} ${r.report_year} ·
       <span class="chip chip-${r.status}">${r.status}</span></p>`;
   html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div></div>`;
 
   html += `<div class="card"><h3 style="margin-top:0;">Comments &amp; Way Forward</h3>
@@ -1082,7 +1072,7 @@ let execReportRow = null;
 async function renderExecReport(){
   const el = document.getElementById('viewExecReport');
   el.innerHTML = `<div class="card">Loading…</div>`;
-  const { year, month } = reportingPeriod();
+  const { year, month } = todayUgandaDay();
 
   // Pull the current month's executive report (if any) + all submitted dept reports for aggregation.
   const [{ data: existing }, { data: deptReports }] = await Promise.all([
@@ -1107,7 +1097,7 @@ async function renderExecReport(){
   html += `<div class="card"><h2 style="margin-top:0;">Ministry Manager Executive Report</h2>
     <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} ·
       ${isSubmitted ? '<span class="chip chip-submitted">Submitted</span>'
-        : (canEdit ? '<span class="chip chip-draft">Draft — due by the 6th</span>'
+        : (canEdit ? '<span class="chip chip-draft">Draft — due by the 5th</span>'
         : '<span class="chip chip-locked">' + (PROFILE.is_ministry_manager ? 'Window closed' : 'Awaiting submission') + '</span>')}
     </p>`;
 
@@ -1325,11 +1315,11 @@ async function postExecComment(){
    ================================================================ */
 async function renderAdmin(){
   const el = document.getElementById('viewAdmin');
-  const { year, month } = reportingPeriod();
+  const { year, month } = todayUgandaDay();
   el.innerHTML = `<div class="card"><h2>Manage People</h2><div id="peopleTable">Loading…</div></div>
     <div class="card"><h3 style="margin-top:0;">Reopen a Late Submission</h3>
       <p style="color:var(--slate);font-size:13px;margin-top:-6px;">
-        Grants one department permission to submit or edit their ${monthName(month)} ${year} report even though the 6th has passed.
+        Grants one department permission to submit or edit their ${monthName(month)} ${year} report even though the 5th has passed.
       </p>
       <div class="field-grid">
         <div><label>Department</label>
@@ -1366,7 +1356,7 @@ async function renderAdmin(){
 let editingPersonId = null;
 
 async function reopenSubmission(){
-  const { year, month } = reportingPeriod();
+  const { year, month } = todayUgandaDay();
   const deptId = document.getElementById('reopenDept').value;
   const msg = document.getElementById('reopenMsg');
   const { error } = await sb.from('submission_overrides').insert({
@@ -1383,7 +1373,7 @@ async function reopenSubmission(){
 }
 
 async function loadActiveOverrides(){
-  const { year, month } = reportingPeriod();
+  const { year, month } = todayUgandaDay();
   const { data } = await sb.from('submission_overrides')
     .select('*, departments(name)').eq('report_month', month).eq('report_year', year);
   const box = document.getElementById('activeOverrides');
