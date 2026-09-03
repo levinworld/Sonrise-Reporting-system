@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root{
     --paper:#F5F6F1;
@@ -218,8 +219,8 @@
 /* =====================================================================
    CONFIG — replace with your Supabase project's values before deploying
    ===================================================================== */
-const SUPABASE_URL = 'https://bthiwndaojiecunwkvlr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0aGl3bmRhb2ppZWN1bndrdmxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MjQxMDAsImV4cCI6MjA5OTAwMDEwMH0.azkbA7AiGbjEAyoUom9xww95FIDeHQq90aEF-_oThoI';
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let CURRENT_USER = null;   // Supabase auth user
@@ -441,31 +442,17 @@ async function renderMyDashboard(){
   el.innerHTML = html;
 }
 
-// Opening a report row from the dashboard:
-//  - A submitted report always opens read-only.
-//  - A draft opens the EDITABLE form as long as the submission window is open
-//    (or the user is admin / has an override). We deliberately do NOT require the
-//    draft's month to equal the current reporting period, because drafts created
-//    before the "previous-month" change carry the old month label — they should
-//    still be editable.
-async function openMyReportRow(reportId, status, rMonth, rYear){
-  if (status !== 'draft'){ viewMyPastReport(reportId); return; }
-
-  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
-  const { data: override } = await sb.from('submission_overrides')
-    .select('id').eq('department_id', dept.id).eq('report_month', rMonth).eq('report_year', rYear).maybeSingle();
-  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
-
-  if (windowOpen){
-    editDraftById(reportId, rMonth, rYear);
+// Opening a report row from the dashboard: a DRAFT for the current reporting
+// period opens the editable form (so people can continue where they left off);
+// anything submitted, or a draft from a past period, opens read-only.
+function openMyReportRow(reportId, status, rMonth, rYear){
+  const { month, year } = reportingPeriod();
+  const isCurrentPeriod = (rMonth === month && rYear === year);
+  if (status === 'draft' && isCurrentPeriod){
+    renderMyReportForm();
   } else {
     viewMyPastReport(reportId);
   }
-}
-
-function editDraftById(reportId, rMonth, rYear){
-  showView('myReport');
-  renderMyReportForm(rMonth, rYear);
 }
 
 async function loadDeptCommentsFeed(deptId){
@@ -497,15 +484,12 @@ function viewMyPastReport(reportId){
 /* ================================================================
    MY REPORT FORM  (the actual editable monthly submission)
    ================================================================ */
-async function renderMyReportForm(targetMonth, targetYear){
+async function renderMyReportForm(){
   const el = document.getElementById('viewMyReport');
   const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
   const schema = window.SCHEMAS[dept.slug];
   currentSchema = schema;
-  // Default to the current reporting period, but allow editing a specific
-  // existing draft (e.g. one saved under the old month before the change).
-  const period = (targetMonth && targetYear) ? { month: targetMonth, year: targetYear } : reportingPeriod();
-  const month = period.month, year = period.year;
+  const { year, month } = reportingPeriod();
 
   const { data: existing } = await sb.from('monthly_reports')
     .select('*').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year)
@@ -536,6 +520,7 @@ async function renderMyReportForm(targetMonth, targetYear){
   }
 
   html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div>`;
   html += `<div style="display:flex;gap:10px;margin-top:20px;">
       <button class="btn btn-secondary" id="btnSaveDraft">Save Draft</button>
@@ -605,12 +590,27 @@ function renderField(f, schema, locked){
     input = document.createElement('input'); input.type = 'date'; input.value = formState[f.key] || '';
   } else if (f.type === 'number'){
     input = document.createElement('input'); input.type = 'number'; input.value = formState[f.key] ?? '';
+  } else if (f.type === 'money'){
+    input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric';
+    input.value = formatMoneyInput(formState[f.key]);
   } else {
     input = document.createElement('input'); input.type = 'text'; input.value = formState[f.key] || '';
   }
   input.disabled = !!f.readOnly || locked;
   input.oninput = input.onchange = () => {
-    formState[f.key] = (f.type === 'number') ? Number(input.value) : input.value;
+    if (f.type === 'number'){
+      formState[f.key] = Number(input.value);
+    } else if (f.type === 'money'){
+      const raw = parseMoneyInput(input.value);
+      formState[f.key] = raw;
+      const pos = input.selectionStart;
+      const before = input.value.length;
+      input.value = formatMoneyInput(raw);
+      const after = input.value.length;
+      input.setSelectionRange(pos + (after - before), pos + (after - before));
+    } else {
+      formState[f.key] = input.value;
+    }
     updateDashboard(schema);
     if (f.revealField) toggleReveal(f);
   };
@@ -689,6 +689,9 @@ function renderTable(f, schema, locked){
             inp = document.createElement('input'); inp.type='date'; inp.value = row[col.key] || '';
           } else if (col.type === 'number'){
             inp = document.createElement('input'); inp.type='number'; inp.value = row[col.key] ?? '';
+          } else if (col.type === 'money'){
+            inp = document.createElement('input'); inp.type='text'; inp.inputMode='numeric';
+            inp.value = formatMoneyInput(row[col.key]);
           } else {
             inp = document.createElement('input'); inp.type='text'; inp.value = row[col.key] || '';
           }
@@ -701,6 +704,18 @@ function renderTable(f, schema, locked){
             inp.onchange = () => {
               row[col.key] = inp.value;
               redraw();
+              updateDashboard(schema);
+            };
+          } else if (col.type === 'money'){
+            inp.oninput = () => {
+              const raw = parseMoneyInput(inp.value);
+              row[col.key] = raw;
+              const pos = inp.selectionStart;
+              const before = inp.value.length;
+              inp.value = formatMoneyInput(raw);
+              const after = inp.value.length;
+              inp.setSelectionRange(pos + (after - before), pos + (after - before));
+              refreshComputed();
               updateDashboard(schema);
             };
           } else {
@@ -753,6 +768,19 @@ function renderTable(f, schema, locked){
   return box;
 }
 function sumCol(rows, key){ return (rows||[]).reduce((t,r)=>t+(Number(r[key])||0),0); }
+
+/* money field helpers: store a plain number in formState, display with thousands separators */
+function parseMoneyInput(str){
+  const cleaned = String(str || '').replace(/[^0-9.]/g, '');
+  const n = Number(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+function formatMoneyInput(val){
+  if (val === undefined || val === null || val === '') return '';
+  const n = Number(val);
+  if (isNaN(n)) return '';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
 
 /* ---------------------------------------------------------------- READ-ONLY RENDERING (viewing someone's submitted report) ---------------------------------------------------------------- */
 function displayValue(v){
@@ -832,6 +860,40 @@ function updateDashboard(schema){
     if (typeof val === 'number') val = val.toLocaleString();
     return `<div class="dash-card"><span class="icon">${d.icon}</span><div class="val">${val}</div><div class="lbl">${d.label}</div></div>`;
   }).join('');
+  renderFinanceChart();
+}
+
+let financeChartInstance = null;
+function renderFinanceChart(){
+  const canvas = document.getElementById('financeChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const hasIncome = Array.isArray(formState.income);
+  const hasExpenses = Array.isArray(formState.expenses);
+  if (!hasIncome && !hasExpenses){ canvas.style.display = 'none'; return; }
+
+  const totalIncome = sumCol(formState.income, 'amount');
+  const totalExpenses = sumCol(formState.expenses, 'amount');
+  if (totalIncome === 0 && totalExpenses === 0){ canvas.style.display = 'none'; return; }
+
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  if (financeChartInstance) financeChartInstance.destroy();
+  financeChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Income', 'Expenses'],
+      datasets: [{
+        label: 'Amount (UGX)',
+        data: [totalIncome, totalExpenses],
+        backgroundColor: ['#2E7D32', '#C62828'],
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expenses' } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString() } } },
+    },
+  });
 }
 
 async function saveReport(deptId, month, year, status){
@@ -972,6 +1034,7 @@ async function openReportDetail(reportId){
     <p style="color:var(--slate);font-size:13px;">${r.departments.name} · ${monthName(r.report_month)} ${r.report_year} ·
       <span class="chip chip-${r.status}">${r.status}</span></p>`;
   html += `<div id="dashCards" class="dash-grid"></div>`;
+  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div></div>`;
 
   html += `<div class="card"><h3 style="margin-top:0;">Comments &amp; Way Forward</h3>
