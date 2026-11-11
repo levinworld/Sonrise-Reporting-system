@@ -27,7 +27,8 @@ insert into departments (slug, name) values
   ('medical',        'Medical / Clinic Department'),
   ('school',         'School Department'),
   ('procurement',    'Procurement & Stores Department'),
-  ('accounts',       'Accounts & Finance Department')
+  ('accounts',       'Accounts & Finance Department'),
+  ('discipleship',   'Discipleship Department')
 on conflict (slug) do nothing;
 
 -- ---------------------------------------------------------------------
@@ -341,6 +342,33 @@ create policy "comments_insert" on report_comments
 --      update profiles set is_ministry_manager = true
 --        where email = 'brendaarinda@sonriseminchildren.org';
 -- =====================================================================
+
+-- =====================================================================
+-- STORAGE BUCKET FOR REPORT FILE ATTACHMENTS
+-- (used by Medical's Excel medicinal-log upload field; reusable by any
+-- future field with type: 'file')
+-- =====================================================================
+insert into storage.buckets (id, name, public)
+values ('report-attachments', 'report-attachments', true)
+on conflict (id) do nothing;
+
+drop policy if exists "report attachments: authenticated upload" on storage.objects;
+create policy "report attachments: authenticated upload"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'report-attachments');
+
+drop policy if exists "report attachments: authenticated update" on storage.objects;
+create policy "report attachments: authenticated update"
+on storage.objects for update
+to authenticated
+using (bucket_id = 'report-attachments');
+
+drop policy if exists "report attachments: public read" on storage.objects;
+create policy "report attachments: public read"
+on storage.objects for select
+to public
+using (bucket_id = 'report-attachments');
 
 -- =====================================================================
 -- END OF SCHEMA

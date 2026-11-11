@@ -25,7 +25,7 @@ so the system runs correctly today for everyone.
 
 1. Go to supabase.com → New Project. Name it something like `sonrise-reports`.
 2. Once created, go to **SQL Editor → New query**, paste the entire contents of
-   `schema.sql`, and run it. This creates all tables, the 12 departments, and the security
+   `schema.sql`, and run it. This creates all tables, the 13 departments, and the security
    rules that enforce who can see and submit what.
 3. Go to **Project Settings → API**. You'll need three values from here shortly:
    - `Project URL`

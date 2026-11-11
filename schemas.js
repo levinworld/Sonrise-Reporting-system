@@ -39,6 +39,7 @@ const FARM_SCHEMA = {
     { label: 'Farm Income (UGX)', icon: '💵', compute: (d) => sum(d.income, 'amount') },
     { label: 'Farm Expenses (UGX)', icon: '💸', compute: (d) => sum(d.expenses, 'amount') },
     { label: 'Net Farm Position (UGX)', icon: '📊', compute: (d) => sum(d.income, 'amount') - sum(d.expenses, 'amount') },
+    { label: 'Value Equivalence Given (Non-Cash)', icon: '🎁', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply'), 'valueEquivalence') },
   ],
   sections: [
     {
@@ -143,12 +144,33 @@ const FARM_SCHEMA = {
             { key: 'recipientName', label: 'Recipient Name (if External/Other)', type: 'text', showIf: (r) => r.recipientType === 'External Customer' || r.recipientType === 'Other' },
             { key: 'sellingPrice', label: 'Selling Price per Unit', type: 'number', showIf: (r) => r.transactionType === 'Sale' },
             {
-              key: 'totalAmount', label: 'Total Amount', type: 'number', readOnly: true,
+              key: 'totalAmount', label: 'Total Amount (Real Income)', type: 'number', readOnly: true,
               auto: (r) => r.transactionType === 'Sale' ? (Number(r.quantity) || 0) * (Number(r.sellingPrice) || 0) : 0,
+            },
+            { key: 'estimatedUnitValue', label: 'Estimated Value per Unit', type: 'number', showIf: (r) => r.transactionType === 'Internal Supply' },
+            {
+              key: 'valueEquivalence', label: 'Value Equivalence (Non-Cash)', type: 'number', readOnly: true,
+              auto: (r) => r.transactionType === 'Internal Supply' ? (Number(r.quantity) || 0) * (Number(r.estimatedUnitValue) || 0) : 0,
             },
             { key: 'purpose', label: 'Purpose/Remarks', type: 'text' },
           ],
-          totals: [{ column: 'totalAmount', label: 'Total Income From Sales' }],
+          totals: [
+            { column: 'totalAmount', label: 'Total Income From Sales (Real Money)' },
+            { column: 'valueEquivalence', label: 'Total Value Equivalence (Non-Cash, Internal Supplies)' },
+          ],
+        },
+        {
+          key: 'valueEquivalenceByDept', type: 'chart', label: 'Value Equivalence Given, by Recipient Department (Non-Cash — not counted as real income)',
+          series: [
+            { label: 'School', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Sonrise Primary School'), 'valueEquivalence') },
+            { label: "Children's Home", color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === "Children's Home"), 'valueEquivalence') },
+            { label: 'Nursery', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Nursery School'), 'valueEquivalence') },
+            { label: 'Guest House', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Guest House'), 'valueEquivalence') },
+            { label: 'Admin', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Administration'), 'valueEquivalence') },
+            { label: 'Kitchen', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Kitchen'), 'valueEquivalence') },
+            { label: 'Staff', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Staff'), 'valueEquivalence') },
+            { label: 'Community', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Community Beneficiary'), 'valueEquivalence') },
+          ],
         },
       ],
     },
@@ -662,11 +684,16 @@ const SOCIAL_WORK_SCHEMA = {
             { key: 'followUpRequired', label: 'Follow-up Required?', type: 'yesno' },
           ],
         },
-        { key: 'abuseCases', label: 'Abuse Cases (count)', type: 'number' },
-        { key: 'neglectCases', label: 'Neglect Cases (count)', type: 'number' },
-        { key: 'exploitationConcerns', label: 'Exploitation Concerns (count)', type: 'number' },
-        { key: 'missingChildIncidents', label: 'Missing Child Incidents (count)', type: 'number' },
-        { key: 'behaviouralConcerns', label: 'Behavioural Concerns (count)', type: 'number' },
+        { key: 'anyAbuseCases', label: 'Were any abuse cases found this month?', type: 'yesno' },
+        { key: 'abuseCasesExplain', label: 'Please briefly explain', type: 'textarea', showIf: (d) => d.anyAbuseCases === 'Yes' },
+        { key: 'anyNeglectCases', label: 'Were any neglect cases found this month?', type: 'yesno' },
+        { key: 'neglectCasesExplain', label: 'Please briefly explain', type: 'textarea', showIf: (d) => d.anyNeglectCases === 'Yes' },
+        { key: 'anyExploitationConcerns', label: 'Were any exploitation concerns found this month?', type: 'yesno' },
+        { key: 'exploitationConcernsExplain', label: 'Please briefly explain', type: 'textarea', showIf: (d) => d.anyExploitationConcerns === 'Yes' },
+        { key: 'anyMissingChildIncidents', label: 'Were there any missing-child incidents this month?', type: 'yesno' },
+        { key: 'missingChildIncidentsExplain', label: 'Please briefly explain', type: 'textarea', showIf: (d) => d.anyMissingChildIncidents === 'Yes' },
+        { key: 'anyBehaviouralConcerns', label: 'Were any significant behavioural concerns identified this month?', type: 'yesno' },
+        { key: 'behaviouralConcernsExplain', label: 'Please briefly explain', type: 'textarea', showIf: (d) => d.anyBehaviouralConcerns === 'Yes' },
       ],
     },
     {
@@ -875,15 +902,15 @@ const SECURITY_SCHEMA = {
   title: 'Security Department Monthly Report',
   dashboard: [
     { label: 'Total Security Officers', icon: '👮', compute: (d) => Number(d.totalSecurityStaff) || 0 },
-    { label: 'Patrols Conducted', icon: '🚶', compute: (d) => count(d.patrols) },
-    { label: 'Visitors Received', icon: '🚪', compute: (d) => count(d.visitors) },
+    { label: 'Patrols Conducted', icon: '🚶', compute: (d) => (Number(d.totalPatrolsDay) || 0) + (Number(d.totalPatrolsNight) || 0) },
+    { label: 'Visitors Received', icon: '🚪', compute: (d) => Number(d.totalVisitors) || 0 },
     { label: 'Security Incidents', icon: '🚨', compute: (d) => count(d.incidents) },
     { label: 'Child Safety Cases', icon: '🛡️', compute: (d) => count(d.childSafetyCases) },
     { label: 'Fire Safety Inspections', icon: '🔥', compute: (d) => count(d.emergencyChecks) },
     { label: 'Assets Inspected', icon: '🏢', compute: (d) => count(d.assets) },
     { label: 'Assets Requiring Repair', icon: '🛠️', compute: (d) => countWhere(d.assets, r => r.repairsNeeded === 'Yes') },
     { label: 'Security Systems Operational', icon: '📹', compute: (d) => countWhere(d.cctv, r => r.operational === 'Yes') },
-    { label: 'Department Expenditure', icon: '💰', compute: (d) => sum(d.financials, 'amount') },
+    { label: 'Urgent Resource Requests', icon: '📑', compute: (d) => count(d.resourceRequests) },
   ],
   sections: [
     {
@@ -918,20 +945,13 @@ const SECURITY_SCHEMA = {
       ],
     },
     {
-      id: 'patrols', title: '4. Daily Patrol Summary',
+      id: 'patrols', title: '4. Patrol Summary',
       fields: [
-        {
-          key: 'patrols', type: 'table', label: 'Daily Patrol Summary',
-          columns: [
-            { key: 'date', label: 'Date', type: 'date' },
-            { key: 'shift', label: 'Shift', type: 'select', options: ['Day', 'Night'] },
-            { key: 'patrolArea', label: 'Patrol Area', type: 'text' },
-            { key: 'patrolTime', label: 'Patrol Time', type: 'text' },
-            { key: 'officersOnDuty', label: 'Officer(s) on Duty', type: 'text' },
-            { key: 'findings', label: 'Findings', type: 'text' },
-            { key: 'actionTaken', label: 'Action Taken', type: 'text' },
-          ],
-        },
+        { key: 'totalPatrolsDay', label: 'Day Patrols Conducted This Month', type: 'number' },
+        { key: 'totalPatrolsNight', label: 'Night Patrols Conducted This Month', type: 'number' },
+        { key: 'areasCovered', label: 'Areas / Routes Covered', type: 'textarea' },
+        { key: 'patrolFindings', label: 'Notable Findings This Month', type: 'textarea' },
+        { key: 'patrolChallenges', label: 'Patrol Challenges', type: 'textarea' },
       ],
     },
     {
@@ -956,23 +976,19 @@ const SECURITY_SCHEMA = {
       ],
     },
     {
-      id: 'visitors', title: '6. Visitor Management',
+      id: 'visitors', title: '6. Visitor Summary',
       fields: [
+        { key: 'totalVisitors', label: 'Total Visitors Received This Month', type: 'number' },
         {
-          key: 'visitors', type: 'table', label: 'Visitor Log',
+          key: 'visitorBreakdown', type: 'table', label: 'Visitors by Type',
           columns: [
-            { key: 'date', label: 'Date', type: 'date' },
-            { key: 'visitorName', label: 'Visitor Name', type: 'text' },
             { key: 'visitorType', label: 'Visitor Type', type: 'select', options: ['Official', 'Contractor', 'Parent/Guardian', 'Supplier', 'Government Official', 'Volunteer', 'Church Visitor', 'Guest'] },
-            { key: 'organization', label: 'Organization', type: 'text' },
-            { key: 'purpose', label: 'Purpose', type: 'text' },
-            { key: 'deptVisited', label: 'Department Visited', type: 'text' },
-            { key: 'timeIn', label: 'Time In', type: 'text' },
-            { key: 'timeOut', label: 'Time Out', type: 'text' },
-            { key: 'escorted', label: 'Escorted?', type: 'yesno' },
-            { key: 'remarks', label: 'Remarks', type: 'text' },
+            { key: 'count', label: 'Count', type: 'number' },
           ],
+          totals: [{ column: 'count', label: 'Total' }],
         },
+        { key: 'allVisitorsEscorted', label: 'Were all visitors escorted per policy?', type: 'yesno' },
+        { key: 'notableVisits', label: 'Notable Visits or Access Concerns', type: 'textarea' },
       ],
     },
     {
@@ -1112,15 +1128,18 @@ const SECURITY_SCHEMA = {
       ],
     },
     {
-      id: 'financials', title: '15. Financial Accountability',
+      id: 'resourceRequests', title: '15. Urgent Needs & Resource Requests',
       fields: [
         {
-          key: 'financials', type: 'table', label: 'Expenses',
+          key: 'resourceRequests', type: 'table',
+          label: 'Equipment & Resource Needs (financial accountability for purchases sits with Procurement — list items here only for budgeting visibility)',
           columns: [
-            { key: 'category', label: 'Category', type: 'select', options: ['Uniforms', 'Equipment Purchases', 'Equipment Repairs', 'Fuel', 'Communication Costs', 'Training', 'Emergency Response', 'Other'] },
-            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
+            { key: 'item', label: 'Item / Need', type: 'text' },
+            { key: 'estimatedCost', label: 'Estimated Cost (UGX)', type: 'number' },
+            { key: 'urgency', label: 'Urgency', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'] },
+            { key: 'notes', label: 'Notes', type: 'text' },
           ],
-          totals: [{ column: 'amount', label: 'Total Department Expenditure' }],
+          totals: [{ column: 'estimatedCost', label: 'Total Estimated Need' }],
         },
       ],
     },
@@ -1172,12 +1191,10 @@ const MEDICAL_SCHEMA = {
   slug: 'medical',
   title: 'Sonrise Ministries Clinic Monthly Report',
   dashboard: [
-    { label: 'Total Patients', icon: '🏥', compute: (d) => sum(d.attendance, 'count') },
-    { label: 'Referrals Out', icon: '🔄', compute: (d) => { const r = (d.attendance || []).find(x => x.category === 'Referrals Out'); return r ? Number(r.count) || 0 : 0; } },
+    { label: 'Total Patients', icon: '🏥', compute: (d) => sum(d.attendance, 'total') },
+    { label: 'Referrals Out', icon: '🔄', compute: (d) => { const r = (d.attendance || []).find(x => x.category === 'Referrals Out'); return r ? Number(r.total) || 0 : 0; } },
     { label: 'Special Needs Cases', icon: '🧩', compute: (d) => count(d.specialNeeds) },
     { label: 'Immunizations', icon: '💉', compute: (d) => Number(d.immunizations) || 0 },
-    { label: 'Stock-outs', icon: '📦', compute: (d) => countWhere(d.medicines, r => (Number(r.stockOutDays) || 0) > 0) },
-    { label: 'Medical Expenditure', icon: '💰', compute: (d) => sum(d.financials, 'amount') },
   ],
   sections: [
     {
@@ -1203,10 +1220,16 @@ const MEDICAL_SCHEMA = {
         {
           key: 'attendance', type: 'table', label: 'Patient Attendance',
           columns: [
-            { key: 'category', label: 'Category', type: 'select', options: ['Sonrise Children', 'Community Children', 'Adults', 'Male', 'Female', 'Referrals In', 'Referrals Out', 'Admissions', 'Discharges'] },
-            { key: 'count', label: 'Number', type: 'number' },
+            { key: 'category', label: 'Category', type: 'select', options: ['Male', 'Female', 'Referrals In', 'Referrals Out', 'Admissions', 'Discharges'] },
+            { key: 'staffCommunity', label: 'Staff & Community', type: 'number' },
+            { key: 'childrensHome', label: "Children's Home Kids", type: 'number' },
+            { key: 'total', label: 'Total', type: 'number', readOnly: true, auto: (row) => (Number(row.staffCommunity) || 0) + (Number(row.childrensHome) || 0) },
           ],
-          totals: [{ column: 'count', label: 'Total Patients Attended' }],
+          totals: [
+            { column: 'staffCommunity', label: 'Total Staff & Community' },
+            { column: 'childrensHome', label: "Total Children's Home Kids" },
+            { column: 'total', label: 'Total Patients Attended' },
+          ],
         },
       ],
     },
@@ -1228,10 +1251,17 @@ const MEDICAL_SCHEMA = {
         {
           key: 'illnesses', type: 'table', label: 'Top Illnesses Treated',
           columns: [
-            { key: 'illness', label: 'Illness', type: 'text' },
-            { key: 'cases', label: 'Number of Cases', type: 'number' },
+            { key: 'illness', label: 'Illness', type: 'select', options: ['Malaria', 'Respiratory Tract Infection', 'Diarrhea', 'Typhoid', 'Skin Infection', 'Intestinal Worms', 'Urinary Tract Infection', 'Eye Infection', 'Ear Infection', 'Dental/Oral Issue', 'Injury/Wound', 'Flu/Common Cold', 'Pneumonia', 'Other'] },
+            { key: 'staffCommunity', label: 'Staff & Community', type: 'number' },
+            { key: 'childrensHome', label: "Children's Home Kids", type: 'number' },
+            { key: 'total', label: 'Total', type: 'number', readOnly: true, auto: (row) => (Number(row.staffCommunity) || 0) + (Number(row.childrensHome) || 0) },
+            { key: 'detailNote', label: 'Detail / Note', type: 'text' },
           ],
-          totals: [{ column: 'cases', label: 'Total Cases' }],
+          totals: [
+            { column: 'staffCommunity', label: 'Total Staff & Community' },
+            { column: 'childrensHome', label: "Total Children's Home Kids" },
+            { column: 'total', label: 'Total Cases' },
+          ],
         },
         { key: 'anyOutbreak', label: 'Any outbreak or unusual trend?', type: 'yesno' },
         { key: 'outbreakExplain', label: 'If Yes, explain', type: 'textarea' },
@@ -1285,34 +1315,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'medicines', title: '9. Medicines & Medical Supplies',
-      fields: [
-        {
-          key: 'medicines', type: 'table', label: 'Medicines & Supplies',
-          columns: [
-            { key: 'itemName', label: 'Item Name', type: 'text' },
-            { key: 'opening', label: 'Opening Balance', type: 'number' },
-            { key: 'received', label: 'Received', type: 'number' },
-            { key: 'used', label: 'Used', type: 'number' },
-            { key: 'closing', label: 'Closing Balance', type: 'number', readOnly: true, auto: (r) => (Number(r.opening) || 0) + (Number(r.received) || 0) - (Number(r.used) || 0) },
-            { key: 'stockOutDays', label: 'Stock-out Days', type: 'number' },
-            { key: 'expiryConcerns', label: 'Expiry Concerns', type: 'text' },
-          ],
-        },
-      ],
-    },
-    {
-      id: 'equipment', title: '10. Equipment & Facility Status',
-      fields: [
-        { key: 'equipmentCondition', label: 'Equipment Condition', type: 'text' },
-        { key: 'faultyEquipment', label: 'Faulty Equipment', type: 'text' },
-        { key: 'repairsNeeded', label: 'Repairs Needed', type: 'text' },
-        { key: 'waterSanitation', label: 'Water and Sanitation Status', type: 'text' },
-        { key: 'powerChallenges', label: 'Power/Electricity Challenges', type: 'text' },
-      ],
-    },
-    {
-      id: 'infection', title: '11. Infection Prevention & Safety',
+      id: 'infection', title: '9. Infection Prevention & Safety',
       fields: [
         { key: 'protocolsFollowed', label: 'Protocols Followed?', type: 'yesno' },
         { key: 'handHygiene', label: 'Hand Hygiene Compliance', type: 'text' },
@@ -1321,7 +1324,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'childProtection', title: '12. Child Protection & Referrals',
+      id: 'childProtection', title: '10. Child Protection & Referrals',
       fields: [
         { key: 'protectionConcerns', label: 'Child Protection Concerns Identified', type: 'textarea' },
         { key: 'protectionReferrals', label: 'Referrals to Social Worker, Hospital, or Counselor', type: 'textarea' },
@@ -1329,7 +1332,7 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'outreach', title: '13. Community Outreach & Health Education',
+      id: 'outreach', title: '11. Community Outreach & Health Education',
       fields: [
         { key: 'healthEducationSessions', label: 'Health Education Sessions Conducted', type: 'number' },
         { key: 'outreachActivities', label: 'Outreach Activities Conducted', type: 'number' },
@@ -1338,32 +1341,26 @@ const MEDICAL_SCHEMA = {
       ],
     },
     {
-      id: 'financials', title: '14. Financial Summary',
+      id: 'medicineLog', title: '12. Medicinal Supplies Log',
       fields: [
-        {
-          key: 'financials', type: 'table', label: 'Expenses',
-          columns: [
-            { key: 'description', label: 'Description', type: 'select', options: ['Medicines Purchased', 'Laboratory Expenses', 'Hospital Referral Costs', 'Medical Equipment Repairs', 'Outreach Costs', 'Other Expenses'] },
-            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
-          ],
-          totals: [{ column: 'amount', label: 'Total Medical Expenditure' }],
-        },
+        { key: 'medicineLogFile', label: 'Attach this month\'s medicinal log / medicine supplies spreadsheet (Excel)', type: 'file', accept: '.xlsx,.xls,.csv' },
+        { key: 'medicineLogNote', label: 'Any notes on stock levels, shortages, or supplies needed', type: 'textarea' },
       ],
     },
     {
-      id: 'challenges', title: '15. Key Challenges, Risks & Recommendations',
+      id: 'challenges', title: '13. Key Challenges, Risks & Recommendations',
       fields: [
         { key: 'challenges', label: 'Major challenges, health risks, recommendations for management', type: 'textarea' },
       ],
     },
     {
-      id: 'nextMonth', title: '16. Priorities & Plan for Next Month',
+      id: 'nextMonth', title: '14. Priorities & Plan for Next Month',
       fields: [
         { key: 'nextMonthPlans', label: 'Planned activities, urgent support required, targets for next month', type: 'textarea' },
       ],
     },
     {
-      id: 'declaration', title: '17. Declaration',
+      id: 'declaration', title: '15. Declaration',
       fields: [
         { key: 'declName', label: 'Name', type: 'text', autoFill: 'submitterName', readOnly: true },
         { key: 'declDate', label: 'Date', type: 'date', autoFill: 'today', readOnly: true },
@@ -1387,6 +1384,7 @@ const SCHOOL_SCHEMA = {
     { label: 'Discipline Cases', icon: '⚖️', compute: (d) => count(d.discipline) },
     { label: 'School Income', icon: '💰', compute: (d) => sum(d.income, 'amount') },
     { label: 'School Expenditure', icon: '💸', compute: (d) => sum(d.expenses, 'amount') },
+    { label: 'Outstanding Balances', icon: '📑', compute: (d) => sum(d.outstandingBalances, 'amountOwed') },
   ],
   sections: [
     {
@@ -1513,9 +1511,9 @@ const SCHOOL_SCHEMA = {
       ],
     },
     {
-      id: 'sports', title: '9. Co-curricular Activities Done This Month',
+      id: 'sports', title: '9. Co-curricular Activities done this month',
       fields: [
-        { key: 'cocurricularActivity', label: 'Activity This Month', type: 'textarea' },
+        { key: 'cocurricularActivity', label: 'Activity this Month', type: 'textarea' },
         { key: 'cocurricularChallenges', label: 'Challenges Encountered', type: 'textarea' },
         { key: 'cocurricularRecommendations', label: 'Recommendations', type: 'textarea' },
       ],
@@ -1576,7 +1574,7 @@ const SCHOOL_SCHEMA = {
           key: 'stores', type: 'table', label: 'School Stores',
           columns: [
             { key: 'item', label: 'Item', type: 'text' },
-            { key: 'unit', label: 'Unit', type: 'select', options: ['Kg', 'g', 'Litres', 'Pieces', 'Packets', 'Boxes', 'Reams', 'Bags', 'Bottles', 'Other'] },
+            { key: 'unit', label: 'Unit', type: 'select', options: ['Kgs', 'Litres', 'Pieces', 'Packets', 'Reams', 'Boxes', 'Cartons', 'Bags', 'Other'] },
             { key: 'opening', label: 'Opening Stock', type: 'number' },
             { key: 'received', label: 'Received', type: 'number' },
             { key: 'issued', label: 'Issued', type: 'number' },
@@ -1593,23 +1591,38 @@ const SCHOOL_SCHEMA = {
         {
           key: 'income', type: 'table', label: 'Income',
           columns: [
-            { key: 'source', label: 'Source', type: 'select', options: ['School Fees', 'Community Payments', 'Bursary Support', 'Government Support', 'Fundraising', 'Donations', 'Other Income'] },
+            { key: 'source', label: 'Source', type: 'select', options: ['School Fees', 'Community Payments', 'Bursary Support', 'Government Support', 'Donations', 'Other Income'] },
             { key: 'description', label: 'Description', type: 'text' },
-            { key: 'amount', label: 'Amount (UGX)', type: 'money' },
+            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
           ],
           totals: [{ column: 'amount', label: 'Total Income' }],
         },
         {
           key: 'expenses', type: 'table', label: 'Expenses',
           columns: [
-            { key: 'category', label: 'Category', type: 'select', options: ['Stationery & Examinations', 'Transport', 'Car Hire', 'Rent', 'Meals', 'Utilities', 'Repairs', 'ICT', 'Sports & Workshops', 'Airtime', 'Medical', 'Salaries', 'Office Expenses', 'Mobilisation', 'Maintenance', 'Other'] },
+            { key: 'category', label: 'Category', type: 'select', options: ['Stationery & Examinations', 'Meals', 'Transport & Car Hire', 'Medication', 'Salaries & Top-ups', 'Utilities', 'Mobilisation', 'Repairs', 'ICT', 'Sports', 'Maintenance', 'Office Expenses', 'Workshop facilitation', 'Other'] },
             { key: 'description', label: 'Description', type: 'text' },
-            { key: 'amount', label: 'Amount (UGX)', type: 'money' },
+            { key: 'amount', label: 'Amount (UGX)', type: 'number' },
           ],
           totals: [{ column: 'amount', label: 'Total Expenses' }],
         },
         {
-          key: 'financialPosition', label: 'Outstanding Debts / Deficit / Balance Notes', type: 'textarea',
+          key: 'outstandingBalances', type: 'table', label: 'Outstanding Balances',
+          columns: [
+            { key: 'source', label: 'Source / Learner', type: 'text' },
+            { key: 'category', label: 'Category', type: 'select', options: ['School Fees Arrears', 'Bursary Shortfall', 'Supplier Debt', 'Other'] },
+            { key: 'amountOwed', label: 'Amount Owed (UGX)', type: 'number' },
+            { key: 'dueDate', label: 'Due Date', type: 'date' },
+            { key: 'notes', label: 'Notes', type: 'text' },
+          ],
+          totals: [{ column: 'amountOwed', label: 'Total Outstanding' }],
+        },
+        {
+          key: 'financialChart', type: 'chart', label: 'Income vs Expenses',
+          series: [
+            { label: 'Income', color: '#1F4D3A', compute: (d) => sum(d.income, 'amount') },
+            { label: 'Expenses', color: '#B9852E', compute: (d) => sum(d.expenses, 'amount') },
+          ],
         },
       ],
     },
@@ -3547,6 +3560,154 @@ const TAILORING_SCHEMA = {
 };
 
 // ---------------------------------------------------------------------
+// DISCIPLESHIP DEPARTMENT
+// Covers discipleship across School children, the Ministry Children's Home,
+// the Community, and the Sonrise Church Sunday programs (the church has its
+// own pastor; the Ministry pastor's involvement there is limited, so that
+// section is kept short and separate). Deliberately a compact form.
+// ---------------------------------------------------------------------
+const DISCIPLESHIP_GROUPS = ['School Children', 'Ministry Children\'s Home', 'Community', 'Sonrise Church (Sunday)', 'Staff & Workers', 'Other'];
+
+const DISCIPLESHIP_SCHEMA = {
+  slug: 'discipleship',
+  title: 'Sonrise Discipleship Department Monthly Report',
+  dashboard: [
+    { label: 'Discipleship Sessions Held', icon: '📖', compute: (d) => sum(d.programs, 'sessionsHeld') },
+    { label: 'Decisions for Christ', icon: '✝️', compute: (d) => sum(d.spiritualGrowth, 'decisions') },
+    { label: 'Baptisms', icon: '💧', compute: (d) => sum(d.spiritualGrowth, 'baptisms') },
+    { label: 'Recommitments', icon: '❤️', compute: (d) => sum(d.spiritualGrowth, 'recommitments') },
+    { label: 'Ongoing Follow-ups', icon: '🤝', compute: (d) => sum(d.spiritualGrowth, 'followUps') },
+    { label: 'Church Sundays Supported', icon: '⛪', compute: (d) => Number(d.churchSundaysHeld) || 0 },
+    { label: 'Counselling Sessions', icon: '💬', compute: (d) => Number(d.counsellingSessions) || 0 },
+    { label: 'Active Discipleship Leaders', icon: '👥', compute: (d) => Number(d.activeLeaders) || 0 },
+  ],
+  sections: [
+    {
+      id: 'info', title: '1. Report Information',
+      fields: [
+        { key: 'reportMonth', label: 'Reporting Month & Year', type: 'text', autoFill: 'monthYear', readOnly: true },
+        { key: 'dateSubmitted', label: 'Date Submitted', type: 'date', autoFill: 'today', readOnly: true },
+        { key: 'discipleshipHead', label: 'Discipleship Department Head', type: 'text', autoFill: 'submitterName', readOnly: true },
+        { key: 'departmentEmail', label: 'Department Email', type: 'text', autoFill: 'submitterEmail', readOnly: true },
+        { key: 'performance', label: 'Overall Department Performance', type: 'select', options: ['Excellent', 'Good', 'Fair', 'Needs Attention'] },
+      ],
+    },
+    {
+      id: 'summary', title: '2. Executive Summary',
+      fields: [
+        { key: 'execSummary', label: 'Summarize the month: key discipleship activities, spiritual highlights, challenges and recommendations', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'programs', title: '3. Discipleship Programs This Month',
+      fields: [
+        {
+          key: 'programs', type: 'table', label: 'Programs & Activities (one row per group and activity)',
+          columns: [
+            { key: 'group', label: 'Group', type: 'select', options: DISCIPLESHIP_GROUPS },
+            { key: 'activity', label: 'Activity', type: 'select', options: ['Bible Study', 'Devotion / Chapel', 'Prayer Meeting', 'Sunday School', 'Cell / Small Group', 'Youth Fellowship', 'Teaching Series', 'Evangelism / Outreach', 'Retreat / Special Event', 'Other'] },
+            { key: 'sessionsHeld', label: 'Sessions Held', type: 'number' },
+            { key: 'avgAttendance', label: 'Average Attendance', type: 'number' },
+            { key: 'facilitator', label: 'Facilitator(s)', type: 'text' },
+            { key: 'keyTeaching', label: 'Main Teaching / Theme', type: 'text' },
+          ],
+          totals: [{ column: 'sessionsHeld', label: 'Total Sessions Held' }],
+        },
+      ],
+    },
+    {
+      id: 'areas', title: '4. School, Children\'s Home & Community Discipleship',
+      fields: [
+        { key: 'schoolHighlights', label: 'School Children Discipleship: highlights and observations this month', type: 'textarea' },
+        { key: 'schoolChallenges', label: 'School Children Discipleship: challenges', type: 'textarea' },
+        { key: 'homeHighlights', label: 'Ministry Children\'s Home Discipleship: highlights and observations this month', type: 'textarea' },
+        { key: 'homeChallenges', label: 'Ministry Children\'s Home Discipleship: challenges', type: 'textarea' },
+        { key: 'communityHighlights', label: 'Community Discipleship: highlights and observations this month', type: 'textarea' },
+        { key: 'communityChallenges', label: 'Community Discipleship: challenges', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'church', title: '5. Sonrise Church: Sunday Programs',
+      fields: [
+        { key: 'churchSundaysHeld', label: 'Sundays Supported This Month', type: 'number' },
+        { key: 'churchAvgAttendance', label: 'Average Sunday Attendance (all)', type: 'number' },
+        { key: 'churchMinistryChildrenAttendance', label: 'Average Ministry Children Attending', type: 'number' },
+        { key: 'churchPastorInvolvement', label: 'How was the Ministry Pastor involved this month (preaching, teaching, children\'s service, pastoral support)?', type: 'textarea' },
+        { key: 'churchHighlights', label: 'Highlights from Sunday programs', type: 'textarea' },
+        { key: 'churchSupportNeeded', label: 'Support or coordination needed with the Church Pastor / church leadership', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'spiritualGrowth', title: '6. Spiritual Growth & Decisions',
+      fields: [
+        {
+          key: 'spiritualGrowth', type: 'table', label: 'Decisions, Baptisms & Follow-up by Group',
+          columns: [
+            { key: 'group', label: 'Group', type: 'select', options: DISCIPLESHIP_GROUPS },
+            { key: 'decisions', label: 'Decisions for Christ', type: 'number' },
+            { key: 'baptisms', label: 'Baptisms', type: 'number' },
+            { key: 'recommitments', label: 'Recommitments', type: 'number' },
+            { key: 'followUps', label: 'Ongoing Follow-ups', type: 'number' },
+            { key: 'testimony', label: 'Testimony / Note (optional)', type: 'text' },
+          ],
+          totals: [
+            { column: 'decisions', label: 'Total Decisions for Christ' },
+            { column: 'baptisms', label: 'Total Baptisms' },
+            { column: 'recommitments', label: 'Total Recommitments' },
+            { column: 'followUps', label: 'Total Ongoing Follow-ups' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'pastoralCare', title: '7. Pastoral Care & Counselling',
+      fields: [
+        { key: 'counsellingSessions', label: 'Counselling / Pastoral Care Sessions Held', type: 'number' },
+        { key: 'visitsMade', label: 'Home, Hospital or Community Visits Made', type: 'number' },
+        { key: 'anySeriousCases', label: 'Were there any serious pastoral cases needing referral (e.g. to Social Work or Medical)?', type: 'yesno' },
+        { key: 'seriousCasesExplain', label: 'Please briefly explain (no names, referral route only)', type: 'textarea', showIf: (d) => d.anySeriousCases === 'Yes' },
+      ],
+    },
+    {
+      id: 'team', title: '8. Discipleship Team, Training & Materials',
+      fields: [
+        { key: 'activeLeaders', label: 'Active Discipleship Leaders / Teachers', type: 'number' },
+        { key: 'activeVolunteers', label: 'Active Volunteers', type: 'number' },
+        { key: 'anyTraining', label: 'Was any training held for discipleship leaders this month?', type: 'yesno' },
+        { key: 'trainingDetails', label: 'Please briefly describe the training (topic, who attended)', type: 'textarea', showIf: (d) => d.anyTraining === 'Yes' },
+        { key: 'materialsNeeded', label: 'Bibles, teaching materials or other resources needed', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'challenges', title: '9. Challenges',
+      fields: [
+        { key: 'challenges', label: 'Main challenges faced this month across the department', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'nextMonth', title: '10. Priorities for Next Month',
+      fields: [
+        { key: 'nextMonthPlans', label: 'Planned programs, special events, trainings and follow-up priorities', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'recommendations', title: '11. Recommendations',
+      fields: [
+        { key: 'recommendations', label: 'Recommendations to the Ministry Manager, Church Pastor, School, Children\'s Home and Social Work', type: 'textarea' },
+      ],
+    },
+    {
+      id: 'declaration', title: '12. Declaration',
+      fields: [
+        { key: 'declName', label: 'Department Head', type: 'text', autoFill: 'submitterName', readOnly: true },
+        { key: 'declDate', label: 'Date', type: 'date', autoFill: 'today', readOnly: true },
+        { key: 'declConfirm', label: 'I confirm this report is accurate to the best of my knowledge', type: 'yesno' },
+      ],
+    },
+  ],
+};
+
+// ---------------------------------------------------------------------
 // Remaining departments — schemas to be added in the same shape as above.
 // Marked comingSoon so the app runs correctly today and each one can be
 // dropped in later without touching any other file.
@@ -3566,6 +3727,7 @@ const SCHEMAS = {
   school: SCHOOL_SCHEMA,
   procurement: PROCUREMENT_SCHEMA,
   accounts: ACCOUNTS_SCHEMA,
+  discipleship: DISCIPLESHIP_SCHEMA,
 };
 
 window.SCHEMAS = SCHEMAS;

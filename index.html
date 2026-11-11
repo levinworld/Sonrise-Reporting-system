@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sonrise Ministries — Monthly Reports</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   :root{
     --paper:#F5F6F1;
@@ -29,10 +28,18 @@
   *{box-sizing:border-box;}
   body{
     margin:0; background:var(--paper); color:var(--ink);
-    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    font-family:'Roboto', 'Google Sans', system-ui, sans-serif;
     font-size:15px; line-height:1.5;
   }
-  h1,h2,h3,.brand{ font-family:'Fraunces', serif; font-weight:600; color:var(--forest-dark); }
+  h1,h2,h3,.brand{ font-family:'Roboto', system-ui, sans-serif; font-weight:700; color:var(--forest-dark); letter-spacing:-.01em; }
+  .material-symbols-outlined{
+    font-family:'Material Symbols Outlined';
+    font-weight:normal; font-style:normal; font-size:20px;
+    display:inline-block; line-height:1; white-space:nowrap; word-wrap:normal;
+    direction:ltr; -webkit-font-smoothing:antialiased;
+    font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;
+    vertical-align:middle;
+  }
   a{ color:var(--forest); }
   .hidden{ display:none !important; }
 
@@ -56,8 +63,46 @@
   main{ max-width:1000px; margin:0 auto; padding:28px 20px 80px; }
   .card{ background:var(--paper-raised); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:22px 24px; margin-bottom:18px; }
 
+  /* ---------- department photo banner ---------- */
+  .dept-photo{
+    position:relative; display:flex; gap:2px; height:190px; overflow:hidden;
+    border-radius:var(--radius); margin:-22px -24px 18px; box-shadow:var(--shadow);
+  }
+  .dept-photo img{ width:100%; height:100%; object-fit:cover; display:block; flex:1 1 0; }
+  .dept-photo::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(28,35,33,0) 40%, rgba(16,20,19,.78) 100%);
+  }
+  .dept-photo .dept-photo-label{
+    position:absolute; left:20px; bottom:14px; z-index:2;
+    color:#fff; font-family:'Roboto', sans-serif; font-weight:700; font-size:21px;
+    text-shadow:0 1px 6px rgba(0,0,0,.45); letter-spacing:-.01em;
+  }
+  @media (max-width:640px){ .dept-photo{ height:140px; } .dept-photo .dept-photo-label{ font-size:17px; } }
+  @media print{ .dept-photo{ margin:0 0 16px; height:150px; box-shadow:none; } }
+
   /* ---------- login ---------- */
-  #loginScreen{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  #loginScreen{ min-height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  #loginScreen .watermark-bg{
+    position:absolute; top:50%; left:50%; width:640px; max-width:none;
+    transform:translate(-50%,-50%); opacity:.07; pointer-events:none; z-index:0;
+  }
+  #loginScreen .card{ position:relative; z-index:1; }
+  .login-logo{ display:block; height:64px; margin:0 auto 10px; }
+  #loginScreen h1{ text-align:center; }
+  #loginScreen p.sub{ text-align:center; }
+  .topbar-logo{ height:30px; width:auto; vertical-align:middle; margin-right:9px; }
+
+  /* ---------- document watermark (report forms, read-only reports, print) ---------- */
+  .doc-watermark{ position:relative; overflow:hidden; }
+  .doc-watermark::before{
+    content:""; position:absolute; top:52%; left:50%; width:380px; height:380px;
+    transform:translate(-50%,-50%);
+    background:url('assets/brand/logo.png') center/contain no-repeat;
+    opacity:.055; pointer-events:none; z-index:0;
+  }
+  .doc-watermark > *{ position:relative; z-index:1; }
+  .doc-watermark > .dept-photo{ z-index:2; }
   #loginScreen .card{ width:360px; }
   #loginScreen h1{ margin:0 0 4px; font-size:22px; }
   #loginScreen p.sub{ color:var(--slate); margin:0 0 20px; font-size:13px; }
@@ -67,7 +112,10 @@
     font-family:inherit; font-size:14px; background:#fff; color:var(--ink);
   }
   input:focus, select:focus, textarea:focus{ outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold); }
-  textarea{ min-height:80px; resize:vertical; }
+  textarea{ min-height:80px; resize:vertical; field-sizing:content; max-height:60vh; overflow-y:auto; }
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  table.data-table input, table.data-table select{ min-width:90px; }
+  table.data-table textarea{ min-height:40px; width:160px; }
   .btn{
     display:inline-flex; align-items:center; gap:6px; border:none; border-radius:8px; padding:10px 18px;
     font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;
@@ -84,8 +132,12 @@
   /* ---------- dashboard cards ---------- */
   .dash-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
   .dash-card{ background:var(--forest-tint); border-radius:var(--radius); padding:14px 16px; }
-  .dash-card .icon{ font-size:20px; }
-  .dash-card .val{ font-family:'Fraunces'; font-size:22px; font-weight:600; color:var(--forest-dark); margin-top:2px; }
+  .dash-card .icon{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:50%;
+    background:#fff; color:var(--forest); font-size:19px;
+  }
+  .dash-card .val{ font-family:'Roboto'; font-size:22px; font-weight:700; color:var(--forest-dark); margin-top:8px; }
   .dash-card .lbl{ font-size:12px; color:var(--slate); }
 
   /* ---------- form sections ---------- */
@@ -148,7 +200,7 @@
     padding:18px 16px; cursor:pointer; transition:box-shadow .15s, transform .15s;
   }
   .dept-tile:hover{ box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--forest); }
-  .dept-tile-name{ font-family:'Fraunces'; font-weight:600; color:var(--forest-dark); font-size:15px; margin-bottom:4px; padding-right:60px; }
+  .dept-tile-name{ font-family:'Roboto'; font-weight:600; color:var(--forest-dark); font-size:15px; margin-bottom:4px; padding-right:60px; }
   .dept-tile-meta{ font-size:12px; color:var(--slate); }
   .dept-tile-badge{
     position:absolute; top:14px; right:14px; background:var(--danger); color:#fff;
@@ -168,7 +220,9 @@
 
 <!-- ============================================================ LOGIN ============================================================ -->
 <div id="loginScreen">
+  <img class="watermark-bg" src="assets/brand/logo.png" alt="">
   <div class="card">
+    <img class="login-logo" src="assets/brand/logo-header.png" alt="Sonrise Ministries">
     <h1>Sonrise Ministries</h1>
     <p class="sub">Monthly Reporting System</p>
     <label for="loginEmail">Email</label>
@@ -183,7 +237,7 @@
 <!-- ============================================================ APP SHELL ============================================================ -->
 <div id="appShell" class="hidden">
   <div id="topbar">
-    <div class="brand">Sonrise Ministries <small>Monthly Reports</small></div>
+    <div class="brand"><img class="topbar-logo" src="assets/brand/logo-header.png" alt="">Sonrise Ministries <small>Monthly Reports</small></div>
     <nav id="mainNav"></nav>
     <div class="who">
       <span id="whoAmI"></span>
@@ -345,6 +399,104 @@ function navigate(key){
 }
 
 /* ---------------------------------------------------------------- HELPERS ---------------------------------------------------------------- */
+// Maps the schema's emoji icons to clean Material Symbols (Gmail-style flat icons),
+// without needing schemas.js itself to change. Unmapped emoji fall back to a generic dot.
+const MATERIAL_ICON_MAP = {
+  '🌾':'agriculture','🐄':'pets','🐔':'egg','🛒':'shopping_cart','🎁':'redeem','💵':'payments','💸':'paid',
+  '📊':'bar_chart','🚗':'directions_car','🚙':'directions_car','🔧':'build','⛽':'local_gas_station',
+  '🛣️':'route','💰':'savings','🧰':'construction','⚠️':'warning','🚨':'emergency','👧':'child_care',
+  '📂':'folder_open','✅':'check_circle','🏠':'home','👨‍👩‍👧':'family_restroom','🏫':'school','💬':'chat',
+  '🛡️':'shield','🤝':'handshake','📑':'description','🔄':'sync','👮':'security','🚶':'directions_walk',
+  '🚪':'meeting_room','🔥':'local_fire_department','🏢':'apartment','🛠️':'handyman','📹':'videocam',
+  '🏥':'local_hospital','🧩':'extension','💉':'vaccines','🎓':'school','👦':'boy','📚':'menu_book',
+  '🛏️':'bed','👩‍🏫':'cast_for_education','⚽':'sports_soccer','❤️':'favorite','⚖️':'balance',
+  '📈':'trending_up','🏦':'account_balance','👥':'groups','📄':'article','💻':'computer',
+  '🖥️':'desktop_windows','👨‍💼':'badge','💾':'save','📋':'assignment','⏳':'hourglass_empty',
+  '🚚':'local_shipping','📦':'inventory_2','⚡':'bolt','🚰':'water_drop','🪑':'chair','🌳':'park',
+  '🏗️':'engineering','🍼':'child_friendly','🌟':'star','📞':'call','🧵':'content_cut','👩‍🎓':'school',
+  '👔':'work','👕':'checkroom','🪡':'content_cut','🛍️':'shopping_bag','👶':'child_care',
+  '✝️':'church','⛪':'church','📖':'menu_book','💧':'water_drop','❤️':'favorite',
+};
+// Department photo banners — shown on each department's own Home page and at
+// the top of its report (editable, read-only and print/PDF). School has two
+// photos side by side; departments with no supplied photo fall back to a
+// general Sonrise Ministries campus photo.
+const DEPARTMENT_PHOTOS = {
+  farm: ['assets/photos/farm.jpg'],
+  security: ['assets/photos/security.jpg'],
+  medical: ['assets/photos/medical.jpg'],
+  tailoring: ['assets/photos/tailoring.jpg'],
+  maintenance: ['assets/photos/maintenance.jpg'],
+  school: ['assets/photos/school-1.jpg', 'assets/photos/school-2.jpg'],
+};
+const DEPARTMENT_PHOTO_FALLBACK = 'assets/photos/generic.jpg';
+function photoBannerHTML(slug, label){
+  const photos = DEPARTMENT_PHOTOS[slug] || [DEPARTMENT_PHOTO_FALLBACK];
+  const imgs = photos.map(p => `<img src="${p}" alt="${label}" loading="lazy">`).join('');
+  return `<div class="dept-photo">${imgs}<div class="dept-photo-label">${label}</div></div>`;
+}
+function iconFor(emoji){
+  const name = MATERIAL_ICON_MAP[emoji];
+  if (name) return `<span class="material-symbols-outlined">${name}</span>`;
+  return emoji || '';
+}
+// Elastic, Google-Forms-style textareas: grow with content instead of showing a
+// scrollbar or a fixed box. field-sizing:content (CSS) already does this on newer
+// browsers; this listener is the fallback/booster for everywhere else, and also
+// covers textareas added later inside tables.
+// ---- money / thousands-separator formatting, used by any number field or table
+// column whose key or label reads as a currency amount (UGX income, expenses,
+// costs, balances, fees, etc.) rather than a plain count. Cursor-position-safe,
+// same discipline as the table cursor fix: never destroy/rebuild the input.
+const MONEY_PATTERN = /amount|cost|price|income|expen|budget|balance|fee|salary|value|paid|payable|receivable|donation|deposit|withdraw|savings|revenue|fund|allowance|grant|ugx|charge|debt|arrear|top-?up|wage/i;
+function isMoneyField(key, label){
+  const s = (key || '') + ' ' + (label || '');
+  return MONEY_PATTERN.test(s);
+}
+function parseMoney(str){
+  const n = Number(String(str ?? '').replace(/,/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+function formatMoneyInput(el){
+  const raw = el.value.replace(/[^\d.]/g, '');
+  if (raw === ''){ return; }
+  const caret = el.selectionStart;
+  const digitsBefore = (el.value.slice(0, caret).match(/\d/g) || []).length;
+  const parts = raw.split('.');
+  const intPart = parts[0].replace(/^0+(?=\d)/, '');
+  const formatted = Number(intPart || '0').toLocaleString('en-US') + (parts.length > 1 ? '.' + parts[1].slice(0,2) : '');
+  el.value = formatted;
+  let count = 0, pos = formatted.length;
+  for (let i = 0; i < formatted.length; i++){
+    if (/\d/.test(formatted[i])) count++;
+    if (count === digitsBefore){ pos = i + 1; break; }
+  }
+  el.setSelectionRange(pos, pos);
+}
+function makeMoneyInput(initialValue){
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.inputMode = 'decimal';
+  inp.autocomplete = 'off';
+  inp.value = (initialValue || initialValue === 0) ? Number(initialValue).toLocaleString('en-US') : '';
+  inp.addEventListener('input', () => formatMoneyInput(inp));
+  return inp;
+}
+function autosizeTextarea(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight + 2, window.innerHeight * 0.6) + 'px';
+}
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.tagName === 'TEXTAREA') autosizeTextarea(e.target);
+}, true);
+// Autosize any textarea already on the page (initial values) whenever the DOM changes.
+new MutationObserver((mutations) => {
+  mutations.forEach(m => m.addedNodes.forEach(node => {
+    if (node.nodeType !== 1) return;
+    if (node.tagName === 'TEXTAREA') autosizeTextarea(node);
+    node.querySelectorAll && node.querySelectorAll('textarea').forEach(autosizeTextarea);
+  }));
+}).observe(document.body, { childList: true, subtree: true });
 function monthName(m){ return ['January','February','March','April','May','June','July','August','September','October','November','December'][m-1]; }
 function todayUgandaDay(){
   // approximate: Africa/Kampala is UTC+3 with no DST
@@ -396,7 +548,7 @@ async function renderMyDashboard(){
     .select('id').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year).maybeSingle();
   const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
 
-  let html = `<div class="card"><h2 style="margin-top:0;">${dept.name}</h2>
+  let html = `<div class="card">${photoBannerHTML(dept.slug, dept.name)}<h2 style="margin-top:0;">${dept.name}</h2>
     <div class="this-month-box">
       <div class="status-block">
         <span class="m">Reporting for ${monthName(month)} ${year}</span>
@@ -442,17 +594,31 @@ async function renderMyDashboard(){
   el.innerHTML = html;
 }
 
-// Opening a report row from the dashboard: a DRAFT for the current reporting
-// period opens the editable form (so people can continue where they left off);
-// anything submitted, or a draft from a past period, opens read-only.
-function openMyReportRow(reportId, status, rMonth, rYear){
-  const { month, year } = reportingPeriod();
-  const isCurrentPeriod = (rMonth === month && rYear === year);
-  if (status === 'draft' && isCurrentPeriod){
-    renderMyReportForm();
+// Opening a report row from the dashboard:
+//  - A submitted report always opens read-only.
+//  - A draft opens the EDITABLE form as long as the submission window is open
+//    (or the user is admin / has an override). We deliberately do NOT require the
+//    draft's month to equal the current reporting period, because drafts created
+//    before the "previous-month" change carry the old month label — they should
+//    still be editable.
+async function openMyReportRow(reportId, status, rMonth, rYear){
+  if (status !== 'draft'){ viewMyPastReport(reportId); return; }
+
+  const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
+  const { data: override } = await sb.from('submission_overrides')
+    .select('id').eq('department_id', dept.id).eq('report_month', rMonth).eq('report_year', rYear).maybeSingle();
+  const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
+
+  if (windowOpen){
+    editDraftById(reportId, rMonth, rYear);
   } else {
     viewMyPastReport(reportId);
   }
+}
+
+function editDraftById(reportId, rMonth, rYear){
+  showView('myReport');
+  renderMyReportForm(rMonth, rYear);
 }
 
 async function loadDeptCommentsFeed(deptId){
@@ -484,12 +650,15 @@ function viewMyPastReport(reportId){
 /* ================================================================
    MY REPORT FORM  (the actual editable monthly submission)
    ================================================================ */
-async function renderMyReportForm(){
+async function renderMyReportForm(targetMonth, targetYear){
   const el = document.getElementById('viewMyReport');
   const dept = DEPARTMENTS.find(d => d.id === PROFILE.department_id);
   const schema = window.SCHEMAS[dept.slug];
   currentSchema = schema;
-  const { year, month } = reportingPeriod();
+  // Default to the current reporting period, but allow editing a specific
+  // existing draft (e.g. one saved under the old month before the change).
+  const period = (targetMonth && targetYear) ? { month: targetMonth, year: targetYear } : reportingPeriod();
+  const month = period.month, year = period.year;
 
   const { data: existing } = await sb.from('monthly_reports')
     .select('*').eq('department_id', dept.id).eq('report_month', month).eq('report_year', year)
@@ -508,7 +677,7 @@ async function renderMyReportForm(){
   const windowOpen = withinWindow() || PROFILE.is_admin || !!override;
 
   let html = `<button class="btn btn-secondary" onclick="navigate('myReport')" style="margin-bottom:14px;">← Back to my dashboard</button>`;
-  html += `<div class="card"><h2>${schema.title}</h2>
+  html += `<div class="card doc-watermark">${photoBannerHTML(dept.slug, schema.title)}<h2>${schema.title}</h2>
     <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} report ·
       ${windowOpen ? '<span class="chip chip-draft">Draft — due by the 6th</span>' : '<span class="chip chip-locked">Submission window closed</span>'}
     </p>`;
@@ -520,7 +689,6 @@ async function renderMyReportForm(){
   }
 
   html += `<div id="dashCards" class="dash-grid"></div>`;
-  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div>`;
   html += `<div style="display:flex;gap:10px;margin-top:20px;">
       <button class="btn btn-secondary" id="btnSaveDraft">Save Draft</button>
@@ -548,8 +716,16 @@ function autofillReadOnlyFields(schema, ctx){
   }));
 }
 
+let CURRENT_FORM_CONTAINER = null;
+function applyConditionals(){
+  if (!CURRENT_FORM_CONTAINER) return;
+  CURRENT_FORM_CONTAINER.querySelectorAll('[data-conditional]').forEach(el => {
+    if (el._field && el._field.showIf) el.style.display = el._field.showIf(formState) ? '' : 'none';
+  });
+}
 function renderFormSections(schema, container, locked){
   container.innerHTML = '';
+  CURRENT_FORM_CONTAINER = container;
   schema.sections.forEach(sec => {
     const h = document.createElement('div');
     h.className = 'section-title';
@@ -559,13 +735,99 @@ function renderFormSections(schema, container, locked){
   });
 }
 
+// ---- file attachment fields (e.g. Medical's Excel medicinal-log upload) ----
+// Stored in Supabase Storage, bucket "report-attachments" (public read, any
+// authenticated user may upload — see add-report-attachments-bucket.sql).
+async function uploadReportFile(file, deptSlug, fieldKey){
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${deptSlug}/${Date.now()}-${fieldKey}-${safeName}`;
+  const { error } = await sb.storage.from('report-attachments').upload(path, file, { upsert: true });
+  if (error) throw error;
+  const { data } = sb.storage.from('report-attachments').getPublicUrl(path);
+  return { name: file.name, path, url: data.publicUrl, uploadedAt: new Date().toISOString() };
+}
+function renderFileField(f, schema, locked){
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  const label = document.createElement('label');
+  label.textContent = f.label;
+  wrap.appendChild(label);
+
+  const info = document.createElement('div');
+  info.style.cssText = 'font-size:13px;margin-bottom:6px;';
+  const renderInfo = () => {
+    const current = formState[f.key];
+    info.innerHTML = current
+      ? `📎 Attached: <a href="${current.url}" target="_blank" rel="noopener">${current.name}</a> <span style="color:var(--slate-light);">(${new Date(current.uploadedAt).toLocaleDateString()})</span>`
+      : `<span style="color:var(--slate-light);font-style:italic;">No file attached yet.</span>`;
+  };
+  renderInfo();
+  wrap.appendChild(info);
+
+  if (!locked){
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    if (f.accept) fileInput.accept = f.accept;
+    fileInput.onchange = async () => {
+      if (!fileInput.files[0]) return;
+      info.textContent = 'Uploading…';
+      try {
+        formState[f.key] = await uploadReportFile(fileInput.files[0], schema.slug, f.key);
+        renderInfo();
+      } catch(e){
+        info.textContent = 'Upload failed: ' + e.message;
+      }
+      fileInput.value = '';
+    };
+    wrap.appendChild(fileInput);
+  }
+  return wrap;
+}
+function renderFileFieldReadOnly(f){
+  const wrap = document.createElement('div');
+  wrap.className = 'ro-field';
+  const label = document.createElement('div');
+  label.className = 'ro-label';
+  label.textContent = f.label;
+  wrap.appendChild(label);
+  const val = document.createElement('div');
+  val.className = 'ro-value';
+  const current = formState[f.key];
+  val.innerHTML = current
+    ? `📎 <a href="${current.url}" target="_blank" rel="noopener">${current.name}</a>`
+    : '<span class="ro-empty" style="margin:0;">No file attached.</span>';
+  wrap.appendChild(val);
+  return wrap;
+}
 function renderField(f, schema, locked){
   const wrap = document.createElement('div');
   wrap.className = 'field-row';
+  if (f.showIf){
+    wrap.dataset.conditional = '1';
+    wrap._field = f;
+    wrap.style.display = f.showIf(formState) ? '' : 'none';
+  }
 
   if (f.type === 'table'){
     if (!Array.isArray(formState[f.key])) formState[f.key] = [];
     wrap.appendChild(renderTable(f, schema, locked));
+    return wrap;
+  }
+
+  if (f.type === 'file'){
+    wrap.appendChild(renderFileField(f, schema, locked));
+    return wrap;
+  }
+
+  if (f.type === 'chart'){
+    const label = document.createElement('label');
+    label.textContent = f.label;
+    wrap.appendChild(label);
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    box.id = `chart-${f.key}`;
+    wrap.appendChild(box);
+    drawChartSVG(box, f);
     return wrap;
   }
 
@@ -588,31 +850,18 @@ function renderField(f, schema, locked){
     input.value = formState[f.key] || '';
   } else if (f.type === 'date'){
     input = document.createElement('input'); input.type = 'date'; input.value = formState[f.key] || '';
+  } else if (f.type === 'number' && isMoneyField(f.key, f.label)){
+    input = makeMoneyInput(formState[f.key]);
   } else if (f.type === 'number'){
     input = document.createElement('input'); input.type = 'number'; input.value = formState[f.key] ?? '';
-  } else if (f.type === 'money'){
-    input = document.createElement('input'); input.type = 'text'; input.inputMode = 'numeric';
-    input.value = formatMoneyInput(formState[f.key]);
   } else {
     input = document.createElement('input'); input.type = 'text'; input.value = formState[f.key] || '';
   }
   input.disabled = !!f.readOnly || locked;
   input.oninput = input.onchange = () => {
-    if (f.type === 'number'){
-      formState[f.key] = Number(input.value);
-    } else if (f.type === 'money'){
-      const raw = parseMoneyInput(input.value);
-      formState[f.key] = raw;
-      const pos = input.selectionStart;
-      const before = input.value.length;
-      input.value = formatMoneyInput(raw);
-      const after = input.value.length;
-      input.setSelectionRange(pos + (after - before), pos + (after - before));
-    } else {
-      formState[f.key] = input.value;
-    }
+    formState[f.key] = (f.type === 'number') ? parseMoney(input.value) : input.value;
     updateDashboard(schema);
-    if (f.revealField) toggleReveal(f);
+    applyConditionals();
   };
   wrap.appendChild(input);
   return wrap;
@@ -624,9 +873,13 @@ function renderTable(f, schema, locked){
   label.textContent = f.label;
   box.appendChild(label);
 
+  const scroll = document.createElement('div');
+  scroll.className = 'table-scroll';
+  box.appendChild(scroll);
+
   const table = document.createElement('table');
   table.className = 'data-table';
-  box.appendChild(table);
+  scroll.appendChild(table);
 
   // Lightweight update: refresh auto-calculated cells and the totals row WITHOUT
   // rebuilding the table, so the input the user is typing in is never destroyed
@@ -687,11 +940,10 @@ function renderTable(f, schema, locked){
             inp.value = row[col.key] || '';
           } else if (col.type === 'date'){
             inp = document.createElement('input'); inp.type='date'; inp.value = row[col.key] || '';
+          } else if (col.type === 'number' && isMoneyField(col.key, col.label)){
+            inp = makeMoneyInput(row[col.key]);
           } else if (col.type === 'number'){
             inp = document.createElement('input'); inp.type='number'; inp.value = row[col.key] ?? '';
-          } else if (col.type === 'money'){
-            inp = document.createElement('input'); inp.type='text'; inp.inputMode='numeric';
-            inp.value = formatMoneyInput(row[col.key]);
           } else {
             inp = document.createElement('input'); inp.type='text'; inp.value = row[col.key] || '';
           }
@@ -706,23 +958,11 @@ function renderTable(f, schema, locked){
               redraw();
               updateDashboard(schema);
             };
-          } else if (col.type === 'money'){
-            inp.oninput = () => {
-              const raw = parseMoneyInput(inp.value);
-              row[col.key] = raw;
-              const pos = inp.selectionStart;
-              const before = inp.value.length;
-              inp.value = formatMoneyInput(raw);
-              const after = inp.value.length;
-              inp.setSelectionRange(pos + (after - before), pos + (after - before));
-              refreshComputed();
-              updateDashboard(schema);
-            };
           } else {
             // Text/number/date: update data + computed cells only. NO full redraw,
             // so the cursor stays put and typing is continuous.
             inp.oninput = () => {
-              row[col.key] = (col.type === 'number') ? Number(inp.value) : inp.value;
+              row[col.key] = (col.type === 'number') ? parseMoney(inp.value) : inp.value;
               refreshComputed();
             };
           }
@@ -769,19 +1009,6 @@ function renderTable(f, schema, locked){
 }
 function sumCol(rows, key){ return (rows||[]).reduce((t,r)=>t+(Number(r[key])||0),0); }
 
-/* money field helpers: store a plain number in formState, display with thousands separators */
-function parseMoneyInput(str){
-  const cleaned = String(str || '').replace(/[^0-9.]/g, '');
-  const n = Number(cleaned);
-  return isNaN(n) ? 0 : n;
-}
-function formatMoneyInput(val){
-  if (val === undefined || val === null || val === '') return '';
-  const n = Number(val);
-  if (isNaN(n)) return '';
-  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-}
-
 /* ---------------------------------------------------------------- READ-ONLY RENDERING (viewing someone's submitted report) ---------------------------------------------------------------- */
 function displayValue(v){
   if (v === undefined || v === null || v === '') return '—';
@@ -801,7 +1028,22 @@ function renderFormSectionsReadOnly(schema, container){
 }
 
 function renderFieldReadOnly(f){
+  if (f.showIf && !f.showIf(formState)) return document.createDocumentFragment();
   if (f.type === 'table') return renderTableReadOnly(f);
+  if (f.type === 'file') return renderFileFieldReadOnly(f);
+  if (f.type === 'chart'){
+    const wrap = document.createElement('div');
+    wrap.className = 'ro-field';
+    const label = document.createElement('div');
+    label.className = 'ro-label';
+    label.textContent = f.label;
+    wrap.appendChild(label);
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    wrap.appendChild(box);
+    drawChartSVG(box, f);
+    return wrap;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'ro-field';
   const label = document.createElement('div');
@@ -847,53 +1089,53 @@ function renderTableReadOnly(f){
     }).join('') + '</tr>';
   }
   table.innerHTML = '<thead>' + thead + '</thead><tbody>' + tbody + '</tbody>';
-  box.appendChild(table);
+  const scroll = document.createElement('div');
+  scroll.className = 'table-scroll';
+  scroll.appendChild(table);
+  box.appendChild(scroll);
   return box;
 }
 
 function updateDashboard(schema){
   const box = document.getElementById('dashCards');
-  if (!box || !schema.dashboard) return;
-  box.innerHTML = schema.dashboard.map(d => {
-    let val;
-    try { val = d.compute(formState); } catch(e){ val = 0; }
-    if (typeof val === 'number') val = val.toLocaleString();
-    return `<div class="dash-card"><span class="icon">${d.icon}</span><div class="val">${val}</div><div class="lbl">${d.label}</div></div>`;
-  }).join('');
-  renderFinanceChart();
+  if (box && schema.dashboard){
+    box.innerHTML = schema.dashboard.map(d => {
+      let val;
+      try { val = d.compute(formState); } catch(e){ val = 0; }
+      if (typeof val === 'number') val = val.toLocaleString();
+      return `<div class="dash-card"><span class="icon">${iconFor(d.icon)}</span><div class="val">${val}</div><div class="lbl">${d.label}</div></div>`;
+    }).join('');
+  }
+  refreshCharts(schema);
 }
-
-let financeChartInstance = null;
-function renderFinanceChart(){
-  const canvas = document.getElementById('financeChart');
-  if (!canvas || typeof Chart === 'undefined') return;
-  const hasIncome = Array.isArray(formState.income);
-  const hasExpenses = Array.isArray(formState.expenses);
-  if (!hasIncome && !hasExpenses){ canvas.style.display = 'none'; return; }
-
-  const totalIncome = sumCol(formState.income, 'amount');
-  const totalExpenses = sumCol(formState.expenses, 'amount');
-  if (totalIncome === 0 && totalExpenses === 0){ canvas.style.display = 'none'; return; }
-
-  canvas.style.display = 'block';
-  const ctx = canvas.getContext('2d');
-  if (financeChartInstance) financeChartInstance.destroy();
-  financeChartInstance = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['Income', 'Expenses'],
-      datasets: [{
-        label: 'Amount (UGX)',
-        data: [totalIncome, totalExpenses],
-        backgroundColor: ['#2E7D32', '#C62828'],
-      }],
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, title: { display: true, text: 'Income vs Expenses' } },
-      scales: { y: { beginAtZero: true, ticks: { callback: (v) => Number(v).toLocaleString() } } },
-    },
+// Draws a small, dependency-free bar chart (no external charting library) for
+// any field of type 'chart' — e.g. School's automatic Income vs Expenses chart.
+function drawChartSVG(container, f){
+  let data;
+  try { data = f.series.map(s => ({ label: s.label, value: Math.max(0, Number(s.compute(formState)) || 0), color: s.color || '#1F4D3A' })); }
+  catch(e){ data = f.series.map(s => ({ label: s.label, value: 0, color: s.color || '#1F4D3A' })); }
+  const max = Math.max(1, ...data.map(d => d.value));
+  const barW = 80, gap = 36, chartH = 150, labelH = 42;
+  const w = data.length * (barW + gap) + gap;
+  const h = chartH + labelH;
+  let bars = '';
+  data.forEach((d, i) => {
+    const x = gap + i * (barW + gap);
+    const barH = Math.round((d.value / max) * (chartH - 24));
+    const y = chartH - barH;
+    bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="5" fill="${d.color}"></rect>`;
+    bars += `<text x="${x + barW/2}" y="${chartH + 20}" text-anchor="middle" font-size="12" fill="#5B6660">${d.label}</text>`;
+    bars += `<text x="${x + barW/2}" y="${Math.max(14,y - 7)}" text-anchor="middle" font-size="12" font-weight="700" fill="#163829">${d.value.toLocaleString()}</text>`;
   });
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="max-width:380px;display:block;">${bars}</svg>`;
+}
+function refreshCharts(schema){
+  if (!schema || !schema.sections) return;
+  schema.sections.forEach(sec => (sec.fields || []).forEach(f => {
+    if (f.type !== 'chart') return;
+    const box = document.getElementById(`chart-${f.key}`);
+    if (box) drawChartSVG(box, f);
+  }));
 }
 
 async function saveReport(deptId, month, year, status){
@@ -1030,11 +1272,10 @@ async function openReportDetail(reportId){
       <button class="btn btn-secondary" onclick="handleReportDetailBack()">${backLabel}</button>
       <button class="btn btn-secondary" onclick="window.print()">🖶 Print / Save as PDF</button>
     </div>`;
-  html += `<div class="card"><h2>${schema.title}</h2>
+  html += `<div class="card doc-watermark">${photoBannerHTML(r.departments.slug, schema.title)}<h2>${schema.title}</h2>
     <p style="color:var(--slate);font-size:13px;">${r.departments.name} · ${monthName(r.report_month)} ${r.report_year} ·
       <span class="chip chip-${r.status}">${r.status}</span></p>`;
   html += `<div id="dashCards" class="dash-grid"></div>`;
-  html += `<canvas id="financeChart" style="max-width:520px;margin:16px 0;display:none;"></canvas>`;
   html += `<div id="formSections"></div></div>`;
 
   html += `<div class="card"><h3 style="margin-top:0;">Comments &amp; Way Forward</h3>
@@ -1167,7 +1408,7 @@ async function renderExecReport(){
       <div></div>
       <button class="btn btn-secondary" onclick="window.print()">🖶 Print / Save as PDF</button>
     </div>`;
-  html += `<div class="card"><h2 style="margin-top:0;">Ministry Manager Executive Report</h2>
+  html += `<div class="card doc-watermark">${photoBannerHTML('_ministry', 'Ministry Manager Executive Report')}<h2 style="margin-top:0;">Ministry Manager Executive Report</h2>
     <p style="color:var(--slate);font-size:13px;">${monthName(month)} ${year} ·
       ${isSubmitted ? '<span class="chip chip-submitted">Submitted</span>'
         : (canEdit ? '<span class="chip chip-draft">Draft — due by the 6th</span>'
@@ -1187,7 +1428,7 @@ async function renderExecReport(){
     ['💰', 'Ministry Income (UGX)', totals.ministryIncome],
     ['💸', 'Ministry Expenditure (UGX)', totals.ministryExpenditure],
     ['📈', 'Net Position (UGX)', totals.ministryIncome - totals.ministryExpenditure],
-  ].map(([icon, label, val]) => `<div class="dash-card"><span class="icon">${icon}</span><div class="val">${(val||0).toLocaleString()}</div><div class="lbl">${label}</div></div>`).join('') + `</div>`;
+  ].map(([icon, label, val]) => `<div class="dash-card"><span class="icon">${iconFor(icon)}</span><div class="val">${(val||0).toLocaleString()}</div><div class="lbl">${label}</div></div>`).join('') + `</div>`;
   html += `</div>`;
 
   // ---- Submission checklist + traffic-light ----
@@ -1251,7 +1492,7 @@ function computeMinistryTotals(byDept){
   if (sch){ T.totalLearners = sum(sch.enrollment, 'boys') + sum(sch.enrollment, 'girls'); }
 
   const med = d('medical');
-  if (med){ T.medicalCases = sum(med.attendance, 'count'); }
+  if (med){ T.medicalCases = sum(med.attendance, 'total'); }
 
   const sw = d('social_work');
   if (sw){
