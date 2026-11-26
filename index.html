@@ -142,7 +142,22 @@
   .dash-card .lbl{ font-size:12px; color:var(--slate); }
 
   /* ---------- form sections ---------- */
-  .section-title{ font-size:16px; margin:26px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  /* Each section of a report gets its own accent colour (set per section in JS),
+     used for the section bar, the questions and the answer boxes, so a long
+     report is easy to scan. */
+  .sec-block{ --sec:var(--forest); --sec-tint:#EEF4F0; margin:0 0 6px; }
+  @supports (background:color-mix(in srgb, red 10%, white)){
+    .sec-block{ --sec-tint:color-mix(in srgb, var(--sec) 8%, white); }
+  }
+  .section-title{ font-size:16px; margin:26px 0 14px; padding:10px 14px; border-radius:8px; border-left:6px solid var(--sec,var(--forest)); background:var(--sec-tint,#EEF4F0); color:var(--sec,var(--forest-dark)); }
+  .sec-block > .section-title{ margin-top:30px; }
+  /* Question labels */
+  .field-row > label, .field-row > div > label{ font-size:14px; font-weight:600; color:var(--sec,var(--forest-dark)); margin:18px 0 7px; line-height:1.4; }
+  /* Proper text boxes */
+  .field-row > textarea{ min-height:130px; padding:12px 14px; line-height:1.65; font-size:14.5px; border:1.5px solid #C9D2CC; border-radius:10px; box-shadow:inset 0 1px 2px rgba(0,0,0,.04); }
+  .field-row > input[type=text], .field-row > input[type=number], .field-row > input[type=date], .field-row > select{ padding:10px 12px; border:1.5px solid #C9D2CC; border-radius:9px; font-size:14.5px; }
+  .field-row > textarea:focus, .field-row > input:focus, .field-row > select:focus{ outline:none; border-color:var(--sec,var(--gold)); box-shadow:0 0 0 3px var(--sec-tint,#EEF4F0); }
+  .field-row > textarea::placeholder{ color:var(--slate-light); }
   .field-row{ margin-bottom:2px; }
   .field-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
   @media (max-width:640px){ .field-grid{ grid-template-columns:1fr; } }
@@ -206,9 +221,21 @@
   .pill{ font-size:11px; padding:2px 8px; border-radius:99px; background:var(--forest-tint); color:var(--forest-dark); margin-right:4px; }
 
   /* ---------- read-only report display ---------- */
-  .ro-field{ margin-bottom:14px; }
-  .ro-label{ font-size:11px; font-weight:600; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
-  .ro-value{ font-size:14px; white-space:pre-wrap; }
+  .ro-field{ margin-bottom:20px; }
+  .ro-label{ font-size:13.5px; font-weight:600; color:var(--sec,var(--forest-dark)); margin-bottom:6px; line-height:1.4; display:flex; gap:8px; align-items:baseline; }
+  .ro-label::before{ content:""; flex:none; width:8px; height:8px; border-radius:2px; background:var(--sec,var(--forest)); transform:translateY(-1px); }
+  .ro-value{ font-size:15px; line-height:1.6; white-space:pre-wrap; padding-left:16px; }
+  .ro-value.ro-none{ color:var(--slate-light); }
+  /* Long written answers: a tidy reading box with proper paragraphs */
+  .ro-text{ max-width:880px; margin-left:16px; padding:14px 18px; background:var(--sec-tint,#EEF4F0); border-left:4px solid var(--sec,var(--forest)); border-radius:4px 10px 10px 4px; font-size:15px; line-height:1.75; color:var(--ink); }
+  .ro-text p{ margin:0 0 10px; }
+  .ro-text p:last-child{ margin-bottom:0; }
+  .ro-text p.sub{ font-weight:700; color:var(--sec,var(--forest-dark)); margin-top:14px; }
+  .ro-text p.sub:first-child{ margin-top:0; }
+  .ro-text p.li{ padding-left:1.7em; text-indent:-1.7em; }
+  .ro-text p.li b{ display:inline-block; min-width:1.7em; text-indent:0; color:var(--sec,var(--forest-dark)); }
+  @media (max-width:640px){ .ro-text{ margin-left:0; padding:12px 14px; } .ro-value{ padding-left:0; } }
+  @media print{ .ro-text{ background:#fff; border:1px solid #ccc; border-left:4px solid var(--sec,var(--forest)); } .section-title{ background:#fff; border:1px solid #ccc; border-left:6px solid var(--sec,var(--forest)); } }
   .ro-empty{ font-size:13px; color:var(--slate-light); font-style:italic; margin:4px 0 10px; }
   table.ro-table td{ font-size:13px; }
 
@@ -784,15 +811,57 @@ function applyConditionals(){
     if (el._field && el._field.showIf) el.style.display = el._field.showIf(formState) ? '' : 'none';
   });
 }
+// Section accent colours, cycled through the report (muted, print-friendly).
+const SECTION_COLORS = ['#1F4D3A', '#0F6B7A', '#4A4FA3', '#8A3F7A', '#B5502F', '#8A6410'];
+function sectionBlock(i){
+  const block = document.createElement('div');
+  block.className = 'sec-block';
+  block.style.setProperty('--sec', SECTION_COLORS[i % SECTION_COLORS.length]);
+  return block;
+}
+// Turns a long written answer into readable paragraphs without changing a word:
+// keeps the writer's own line breaks, hangs numbered/bulleted points, bolds short
+// headings (ALL CAPS lines or lines ending in ":"), and breaks very long
+// unbroken paragraphs at sentence ends.
+function formatLongText(text){
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const out = [];
+  String(text).replace(/\r/g,'').split('\n').forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    let m;
+    if ((m = line.match(/^(\d{1,2}[\.\)])\s+(.*)$/))){
+      out.push(`<p class="li"><b>${esc(m[1])}</b>${esc(m[2])}</p>`);
+    } else if ((m = line.match(/^[-•*–]\s+(.*)$/))){
+      out.push(`<p class="li"><b>•</b>${esc(m[1])}</p>`);
+    } else if (line.length < 90 && (line.endsWith(':') || (line.length > 5 && line === line.toUpperCase() && /[A-Z]/.test(line)))){
+      out.push(`<p class="sub">${esc(line)}</p>`);
+    } else if (line.length > 420){
+      const sentences = line.replace(/([.!?])\s+(?=[A-Z])/g, '$1\u0001').split('\u0001');
+      let chunk = '';
+      sentences.forEach(s => {
+        chunk += (chunk ? ' ' : '') + s;
+        if (chunk.length >= 260){ out.push(`<p>${esc(chunk)}</p>`); chunk = ''; }
+      });
+      if (chunk) out.push(`<p>${esc(chunk)}</p>`);
+    } else {
+      out.push(`<p>${esc(line)}</p>`);
+    }
+  });
+  return out.join('');
+}
+
 function renderFormSections(schema, container, locked){
   container.innerHTML = '';
   CURRENT_FORM_CONTAINER = container;
-  schema.sections.forEach(sec => {
+  schema.sections.forEach((sec, i) => {
+    const block = sectionBlock(i);
     const h = document.createElement('div');
     h.className = 'section-title';
     h.textContent = sec.title;
-    container.appendChild(h);
-    sec.fields.forEach(f => container.appendChild(renderField(f, schema, locked)));
+    block.appendChild(h);
+    sec.fields.forEach(f => block.appendChild(renderField(f, schema, locked)));
+    container.appendChild(block);
   });
 }
 
@@ -1106,12 +1175,14 @@ function displayValue(v){
 
 function renderFormSectionsReadOnly(schema, container){
   container.innerHTML = '';
-  schema.sections.forEach(sec => {
+  schema.sections.forEach((sec, i) => {
+    const block = sectionBlock(i);
     const h = document.createElement('div');
     h.className = 'section-title';
     h.textContent = sec.title;
-    container.appendChild(h);
-    sec.fields.forEach(f => container.appendChild(renderFieldReadOnly(f)));
+    block.appendChild(h);
+    sec.fields.forEach(f => block.appendChild(renderFieldReadOnly(f)));
+    container.appendChild(block);
   });
 }
 
@@ -1138,8 +1209,15 @@ function renderFieldReadOnly(f){
   label.className = 'ro-label';
   label.textContent = f.label;
   const val = document.createElement('div');
-  val.className = 'ro-value';
-  val.textContent = displayValue(formState[f.key]);
+  const raw = formState[f.key];
+  const empty = raw === undefined || raw === null || raw === '';
+  if (f.type === 'textarea' && !empty){
+    val.className = 'ro-text';
+    val.innerHTML = formatLongText(raw);
+  } else {
+    val.className = 'ro-value' + (empty ? ' ro-none' : '');
+    val.textContent = displayValue(raw);
+  }
   wrap.appendChild(label);
   wrap.appendChild(val);
   return wrap;
@@ -1631,16 +1709,25 @@ function computeMinistryTotals(byDept){
 function renderExecSections(canEdit){
   const box = document.getElementById('execSections');
   box.innerHTML = '';
-  EXEC_SECTIONS.forEach(f => {
+  EXEC_SECTIONS.forEach((f, i) => {
+    const accent = SECTION_COLORS[i % SECTION_COLORS.length];
     if (!canEdit){
       const wrap = document.createElement('div');
       wrap.className = 'ro-field';
-      wrap.innerHTML = `<div class="ro-label">${f.label}</div><div class="ro-value">${(execFormState[f.id] || '—').toString().replace(/</g,'&lt;')}</div>`;
+      wrap.style.setProperty('--sec', accent);
+      wrap.style.setProperty('--sec-tint', `color-mix(in srgb, ${accent} 8%, white)`);
+      const v = execFormState[f.id];
+      const body = (v && f.type !== 'select')
+        ? `<div class="ro-text">${formatLongText(v)}</div>`
+        : `<div class="ro-value${v ? '' : ' ro-none'}">${(v || '—').toString().replace(/</g,'&lt;')}</div>`;
+      wrap.innerHTML = `<div class="ro-label">${f.label}</div>${body}`;
       box.appendChild(wrap);
       return;
     }
     const wrap = document.createElement('div');
     wrap.className = 'field-row';
+    wrap.style.setProperty('--sec', accent);
+    wrap.style.setProperty('--sec-tint', `color-mix(in srgb, ${accent} 8%, white)`);
     const label = document.createElement('label');
     label.textContent = f.label;
     wrap.appendChild(label);
