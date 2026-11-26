@@ -5,6 +5,8 @@
 const nodemailer = require('nodemailer');
 const { createClient } = require('@supabase/supabase-js');
 
+const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method not allowed' };
 
@@ -44,13 +46,13 @@ exports.handler = async (event) => {
       html:
         `<p>A monthly report has just been submitted.</p>` +
         `<table style="border-collapse:collapse;font-size:14px;margin:10px 0;">
-          <tr><td style="padding:3px 10px 3px 0;color:#666;">From</td><td><strong>${submitterName}</strong></td></tr>
-          <tr><td style="padding:3px 10px 3px 0;color:#666;">Department</td><td>${departmentName}</td></tr>
-          <tr><td style="padding:3px 10px 3px 0;color:#666;">Report Month</td><td>${month} ${year}</td></tr>
+          <tr><td style="padding:3px 10px 3px 0;color:#666;">From</td><td><strong>${esc(submitterName)}</strong></td></tr>
+          <tr><td style="padding:3px 10px 3px 0;color:#666;">Department</td><td>${esc(departmentName)}</td></tr>
+          <tr><td style="padding:3px 10px 3px 0;color:#666;">Report Month</td><td>${esc(month)} ${esc(year)}</td></tr>
           <tr><td style="padding:3px 10px 3px 0;color:#666;">Date</td><td>${dateStr}</td></tr>
           <tr><td style="padding:3px 10px 3px 0;color:#666;">Time</td><td>${timeStr}</td></tr>
         </table>` +
-        (link ? `<p><a href="${link}">Open the report</a></p>` : ''),
+        (link ? `<p><a href="${esc(link)}">Open the report</a></p>` : ''),
     });
 
     return { statusCode: 200, body: JSON.stringify({ sent: true, to: leaders.length }) };

@@ -14,6 +14,11 @@
 const sum = (rows, key) => (rows || []).reduce((t, r) => t + (Number(r[key]) || 0), 0);
 const count = (rows) => (rows || []).length;
 const countWhere = (rows, pred) => (rows || []).filter(pred).length;
+const sumBy = (rows, fn) => (rows || []).reduce((t, r) => t + (Number(fn(r)) || 0), 0);
+// Farm: non-cash value of produce given internally = quantity x estimated unit value.
+// Worked out straight from each row's own entries (not from a stored result), so
+// reports saved before this existed still total correctly once values are filled in.
+const farmValueEq = (r) => r.transactionType === 'Internal Supply' ? (Number(r.quantity) || 0) * (Number(r.estimatedUnitValue) || 0) : 0;
 
 // ---- field type reference ----
 // text        -> single-line text input
@@ -39,7 +44,7 @@ const FARM_SCHEMA = {
     { label: 'Farm Income (UGX)', icon: '💵', compute: (d) => sum(d.income, 'amount') },
     { label: 'Farm Expenses (UGX)', icon: '💸', compute: (d) => sum(d.expenses, 'amount') },
     { label: 'Net Farm Position (UGX)', icon: '📊', compute: (d) => sum(d.income, 'amount') - sum(d.expenses, 'amount') },
-    { label: 'Value Equivalence Given (Non-Cash)', icon: '🎁', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply'), 'valueEquivalence') },
+    { label: 'Value Equivalence Given (Non-Cash)', icon: '🎁', compute: (d) => sumBy(d.distribution, farmValueEq) },
   ],
   sections: [
     {
@@ -142,14 +147,16 @@ const FARM_SCHEMA = {
             { key: 'transactionType', label: 'Transaction Type', type: 'select', options: ['Internal Supply', 'Sale', 'Donation'] },
             { key: 'recipientType', label: 'Recipient Type', type: 'select', options: ['Sonrise Primary School', 'Children\'s Home', 'Nursery School', 'Guest House', 'Administration', 'Kitchen', 'Staff', 'Community Beneficiary', 'External Customer', 'Other'] },
             { key: 'recipientName', label: 'Recipient Name (if External/Other)', type: 'text', showIf: (r) => r.recipientType === 'External Customer' || r.recipientType === 'Other' },
-            { key: 'sellingPrice', label: 'Selling Price per Unit', type: 'number', showIf: (r) => r.transactionType === 'Sale' },
+            { key: 'sellingPrice', label: 'Selling Price per Unit', type: 'number', showIf: (r) => r.transactionType === 'Sale', group: 'Cash Sales — Real Income', groupClass: 'cash' },
             {
-              key: 'totalAmount', label: 'Total Amount (Real Income)', type: 'number', readOnly: true,
+              key: 'totalAmount', label: 'Total Amount (Real Income)', type: 'number', readOnly: true, group: 'Cash Sales — Real Income', groupClass: 'cash',
+              showIf: (r) => r.transactionType === 'Sale',
               auto: (r) => r.transactionType === 'Sale' ? (Number(r.quantity) || 0) * (Number(r.sellingPrice) || 0) : 0,
             },
-            { key: 'estimatedUnitValue', label: 'Estimated Value per Unit', type: 'number', showIf: (r) => r.transactionType === 'Internal Supply' },
+            { key: 'estimatedUnitValue', label: 'Estimated Value per Unit', type: 'number', showIf: (r) => r.transactionType === 'Internal Supply', group: 'Internal Supply — Non-Cash Value Equivalence', groupClass: 'noncash', pendingText: 'Not entered' },
             {
-              key: 'valueEquivalence', label: 'Value Equivalence (Non-Cash)', type: 'number', readOnly: true,
+              key: 'valueEquivalence', label: 'Value Equivalence (Non-Cash)', type: 'number', readOnly: true, group: 'Internal Supply — Non-Cash Value Equivalence', groupClass: 'noncash',
+              showIf: (r) => r.transactionType === 'Internal Supply',
               auto: (r) => r.transactionType === 'Internal Supply' ? (Number(r.quantity) || 0) * (Number(r.estimatedUnitValue) || 0) : 0,
             },
             { key: 'purpose', label: 'Purpose/Remarks', type: 'text' },
@@ -160,16 +167,16 @@ const FARM_SCHEMA = {
           ],
         },
         {
-          key: 'valueEquivalenceByDept', type: 'chart', label: 'Value Equivalence Given, by Recipient Department (Non-Cash — not counted as real income)',
+          key: 'valueEquivalenceByDept', type: 'chart', emptyHint: 'No value equivalence recorded yet. On each Internal Supply row above, enter the Estimated Value per Unit — the value (Quantity × Estimated Value per Unit) and this chart then fill in automatically. This is a record of value given, not money earned.', label: 'Value Equivalence Given, by Recipient Department (Non-Cash — not counted as real income)',
           series: [
-            { label: 'School', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Sonrise Primary School'), 'valueEquivalence') },
-            { label: "Children's Home", color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === "Children's Home"), 'valueEquivalence') },
-            { label: 'Nursery', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Nursery School'), 'valueEquivalence') },
-            { label: 'Guest House', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Guest House'), 'valueEquivalence') },
-            { label: 'Admin', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Administration'), 'valueEquivalence') },
-            { label: 'Kitchen', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Kitchen'), 'valueEquivalence') },
-            { label: 'Staff', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Staff'), 'valueEquivalence') },
-            { label: 'Community', color: '#1F4D3A', compute: (d) => sum((d.distribution || []).filter(r => r.transactionType === 'Internal Supply' && r.recipientType === 'Community Beneficiary'), 'valueEquivalence') },
+            { label: 'School', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Sonrise Primary School'), farmValueEq) },
+            { label: "Children's Home", color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === "Children's Home"), farmValueEq) },
+            { label: 'Nursery', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Nursery School'), farmValueEq) },
+            { label: 'Guest House', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Guest House'), farmValueEq) },
+            { label: 'Admin', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Administration'), farmValueEq) },
+            { label: 'Kitchen', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Kitchen'), farmValueEq) },
+            { label: 'Staff', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Staff'), farmValueEq) },
+            { label: 'Community', color: '#B7791F', compute: (d) => sumBy((d.distribution || []).filter(r => r.recipientType === 'Community Beneficiary'), farmValueEq) },
           ],
         },
       ],
